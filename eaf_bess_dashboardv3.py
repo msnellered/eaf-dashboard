@@ -35,6 +35,8 @@ app = dash.Dash(
     ],
     suppress_callback_exceptions=True,  # Needed for pattern-matching callbacks
 )
+server = app.server
+
 app.title = "EAF-BESS Peak Shaving Dashboard V2 (Fixed)"
 
 # --- Default Parameters ---
@@ -2290,4 +2292,7 @@ def update_results(
 
 # --- Run Server ---
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=8050)  # Specify port if needed
+    # You might also want to let Render set the port via environment variable
+    import os
+    port = int(os.environ.get("PORT", 8050))
+    app.run(host="0.0.0.0", port=port) # Removed debug=True
