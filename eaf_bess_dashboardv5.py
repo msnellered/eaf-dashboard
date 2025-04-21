@@ -3173,7 +3173,7 @@ def debug_results(n_clicks, utility_params):
             html.Pre(f"Error: {str(e)}"),
             html.Pre(f"Error type: {type(e).__name__}")
         ], className="alert alert-danger")   
- @app.callback(
+@app.callback(
     Output("results-output-container", "children"),
     Input("calculate-results-button", "n_clicks"),
     prevent_initial_call=True
