@@ -2262,7 +2262,79 @@ app.layout = html.Div(
 )
 # --- Callbacks ---
 
-
+# Callback to update utility parameters store
+@app.callback(
+    Output("utility-params-store", "data"),
+    [Input("utility-provider-dropdown", "value"),
+     Input("off-peak-rate", "value"),
+     Input("mid-peak-rate", "value"),
+     Input("peak-rate", "value"),
+     Input("demand-charge", "value"),
+     Input("seasonal-rates-toggle", "value"),
+     Input("winter-multiplier", "value"),
+     Input("summer-multiplier", "value"),
+     Input("shoulder-multiplier", "value"),
+     Input("winter-months", "value"),
+     Input("summer-months", "value"),
+     Input("shoulder-months", "value"),
+     Input({"type": "tou-start", "index": ALL}, "value"),
+     Input({"type": "tou-end", "index": ALL}, "value"),
+     Input({"type": "tou-rate", "index": ALL}, "value")],
+)
+def update_utility_params(
+    utility_provider, off_peak_rate, mid_peak_rate, peak_rate, demand_charge,
+    seasonal_toggle, winter_mult, summer_mult, shoulder_mult,
+    winter_months, summer_months, shoulder_months,
+    tou_starts, tou_ends, tou_rates
+):
+    """Update utility parameters store based on user inputs"""
+    # Create energy rates dictionary
+    energy_rates = {
+        "off_peak": off_peak_rate,
+        "mid_peak": mid_peak_rate,
+        "peak": peak_rate
+    }
+    
+    # Parse seasonal months
+    try:
+        winter_months_list = [int(m.strip()) for m in winter_months.split(",") if m.strip()]
+    except:
+        winter_months_list = [11, 12, 1, 2, 3]  # Default
+        
+    try:
+        summer_months_list = [int(m.strip()) for m in summer_months.split(",") if m.strip()]
+    except:
+        summer_months_list = [6, 7, 8, 9]  # Default
+        
+    try:
+        shoulder_months_list = [int(m.strip()) for m in shoulder_months.split(",") if m.strip()]
+    except:
+        shoulder_months_list = [4, 5, 10]  # Default
+    
+    # Build TOU periods
+    tou_periods = []
+    for i in range(len(tou_starts)):
+        if tou_starts[i] is not None and tou_ends[i] is not None and tou_rates[i] is not None:
+            tou_periods.append((tou_starts[i], tou_ends[i], tou_rates[i]))
+    
+    # Sort periods by start time
+    tou_periods = sorted(tou_periods)
+    
+    # Create utility parameters dictionary
+    utility_params = {
+        "energy_rates": energy_rates,
+        "demand_charge": demand_charge,
+        "tou_periods": tou_periods,
+        "seasonal_rates": True if seasonal_toggle and "enabled" in seasonal_toggle else False,
+        "winter_months": winter_months_list,
+        "summer_months": summer_months_list,
+        "shoulder_months": shoulder_months_list,
+        "winter_multiplier": winter_mult,
+        "summer_multiplier": summer_mult,
+        "shoulder_multiplier": shoulder_mult
+    }
+    
+    return utility_params
 # Callback to update Mill Info Card when mill is selected
 @app.callback(
     Output("mill-info-card", "children"), Input("mill-selection-dropdown", "value")
