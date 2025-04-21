@@ -3172,6 +3172,18 @@ def debug_results(n_clicks, utility_params):
             html.H3("General Error"),
             html.Pre(f"Error: {str(e)}"),
             html.Pre(f"Error type: {type(e).__name__}")
-        ], className="alert alert-danger")        
+        ], className="alert alert-danger")   
+ @app.callback(
+    Output("results-output-container", "children"),
+    Input("calculate-results-button", "n_clicks"),
+    prevent_initial_call=True
+)
+def very_simple_debug(n_clicks):
+    """This is the simplest possible callback to test if the container works."""
+    return html.Div([
+        html.H3("Simple Debug Test"),
+        html.P(f"Button clicked {n_clicks} times."),
+        html.P("If you can see this message, the results container is working correctly.")
+    ])            
 if __name__ == "__main__":
     app.run_server(host="0.0.0.0", port=8050, debug=False)
