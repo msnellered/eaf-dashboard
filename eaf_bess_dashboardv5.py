@@ -440,7 +440,37 @@ utility_rates = {
 }
 # --- Helper Functions ---
 
-
+def fill_tou_gaps(periods):
+    """Fill gaps in TOU periods with off-peak rates"""
+    # Sort periods by start time
+    sorted_periods = sorted(periods)
+    filled_periods = []
+    
+    # Add period from 0 to first start if needed
+    if sorted_periods and sorted_periods[0][0] > 0:
+        filled_periods.append((0, sorted_periods[0][0], "off_peak"))
+    
+    # Add all existing periods
+    filled_periods.extend(sorted_periods)
+    
+    # Fill gaps between periods
+    i = 0
+    while i < len(filled_periods) - 1:
+        if filled_periods[i][1] < filled_periods[i + 1][0]:
+            filled_periods.insert(i + 1, (filled_periods[i][1], filled_periods[i + 1][0], "off_peak"))
+            # Skip the newly inserted period in the next iteration
+            i += 1
+        i += 1
+    
+    # Add period from last end to 24 if needed
+    if filled_periods and filled_periods[-1][1] < 24:
+        filled_periods.append((filled_periods[-1][1], 24, "off_peak"))
+    
+    # Handle the case where no periods were provided
+    if not filled_periods:
+        filled_periods.append((0, 24, "off_peak"))
+        
+    return filled_periods
 def get_month_season_multiplier(month, seasonal_data):
     """Determine the rate multiplier based on the month and seasonal configuration"""
     if not seasonal_data["seasonal_rates"]:
@@ -528,6 +558,9 @@ def create_monthly_bill_with_bess(
     }
     demand_charge = utility_params["demand_charge"] * seasonal_mult
 
+    # Fill any gaps in TOU periods with off-peak
+    filled_tou_periods = fill_tou_gaps(utility_params["tou_periods"])
+
     # EAF profile calculation - use actual cycle duration
     cycle_duration_min = eaf_params.get(
         "cycle_duration_input", 36
@@ -560,12 +593,13 @@ def create_monthly_bill_with_bess(
     total_energy_cost = 0
 
     # Calculate proportion of cycles in each TOU period
+    # Using filled_tou_periods instead of utility_params["tou_periods"]
     tou_hours = {
-        period: end - start for start, end, period in utility_params["tou_periods"]
+        period: end - start for start, end, period in filled_tou_periods
     }
     total_hours = 24
 
-    for start, end, period in utility_params["tou_periods"]:
+    for start, end, period in filled_tou_periods:
         period_hours = end - start
         period_fraction = period_hours / total_hours
         cycles_in_period = eaf_params["cycles_per_day"] * period_fraction
@@ -607,6 +641,9 @@ def create_monthly_bill_without_bess(
     }
     demand_charge = utility_params["demand_charge"] * seasonal_mult
 
+    # Fill any gaps in TOU periods with off-peak
+    filled_tou_periods = fill_tou_gaps(utility_params["tou_periods"])
+
     # EAF profile calculation - use actual cycle duration
     cycle_duration_min = eaf_params.get(
         "cycle_duration_input", 36
@@ -633,7 +670,8 @@ def create_monthly_bill_without_bess(
     total_energy_cost = 0
 
     # Calculate proportion of cycles in each TOU period
-    for start, end, period in utility_params["tou_periods"]:
+    # Using filled_tou_periods instead of utility_params["tou_periods"]
+    for start, end, period in filled_tou_periods:
         period_hours = end - start
         period_fraction = period_hours / 24
         cycles_in_period = eaf_params["cycles_per_day"] * period_fraction
@@ -2811,6 +2849,7 @@ def validate_inputs(
         return "", {"display": "none"}
 
     errors = []
+    warnings = []
 
     # Check TOU periods
     if (
@@ -2835,17 +2874,17 @@ def validate_inputs(
         if not periods:
             errors.append("No valid Time-of-Use periods defined.")
         else:
-            # Check if periods cover 0-24 hours
+            # Generate a warning if periods don't cover 0-24
             if periods[0][0] != 0 or periods[-1][1] != 24:
-                errors.append(
-                    "Time-of-Use periods must cover the full 24 hours (0 to 24)."
+                warnings.append(
+                    "Time-of-Use periods don't cover the full 24 hours. Off-peak rates will be applied to missing hours."
                 )
-
-            # Check for gaps or overlaps
+            
+            # Check for overlaps (but allow gaps)
             for i in range(len(periods) - 1):
-                if periods[i][1] != periods[i + 1][0]:
+                if periods[i][1] > periods[i + 1][0]:
                     errors.append(
-                        f"Time-of-Use periods have gaps or overlaps. Period ending at {periods[i][1]} should connect to period starting at {periods[i+1][0]}."
+                        f"Time-of-Use periods have overlaps. Period ending at {periods[i][1]} overlaps with period starting at {periods[i+1][0]}."
                     )
 
     # Check seasonal months if enabled
@@ -2893,15 +2932,20 @@ def validate_inputs(
     # Check BESS parameters
     if bess_capacity is not None and bess_power is not None:
         if bess_power > 2 * bess_capacity:
-            errors.append(
-                "Warning: Battery power rating (MW) is more than twice the energy capacity (MWh), which may not be practical."
+            warnings.append(
+                "Battery power rating (MW) is more than twice the energy capacity (MWh), which may not be practical."
             )
 
-    # If errors exist, display them
+    # If errors exist, display them, otherwise show warnings
     if errors:
         error_list = html.Ul([html.Li(error) for error in errors])
         return [html.H5("Validation Errors:", className="mb-2"), error_list], {
             "display": "block"
+        }
+    elif warnings:
+        warning_list = html.Ul([html.Li(warning) for warning in warnings])
+        return [html.H5("Warnings:", className="mb-2"), warning_list], {
+            "display": "block", "background-color": "#fff3cd", "color": "#856404"  # Yellow warning style
         }
     else:
         return "", {"display": "none"}
