@@ -2277,9 +2277,9 @@ app.layout = html.Div(
      Input("winter-months", "value"),
      Input("summer-months", "value"),
      Input("shoulder-months", "value"),
-     Input({"type": "tou-start", "index": ALL}, "value"),
-     Input({"type": "tou-end", "index": ALL}, "value"),
-     Input({"type": "tou-rate", "index": ALL}, "value")],
+     Input({"type": "tou-start", "index": dash.dependencies.ALL}, "value"),
+     Input({"type": "tou-end", "index": dash.dependencies.ALL}, "value"),
+     Input({"type": "tou-rate", "index": dash.dependencies.ALL}, "value")],
 )
 def update_utility_params(
     utility_provider, off_peak_rate, mid_peak_rate, peak_rate, demand_charge,
@@ -2298,27 +2298,31 @@ def update_utility_params(
     # Parse seasonal months
     try:
         winter_months_list = [int(m.strip()) for m in winter_months.split(",") if m.strip()]
-    except:
+    except (ValueError, AttributeError, TypeError):
         winter_months_list = [11, 12, 1, 2, 3]  # Default
         
     try:
         summer_months_list = [int(m.strip()) for m in summer_months.split(",") if m.strip()]
-    except:
+    except (ValueError, AttributeError, TypeError):
         summer_months_list = [6, 7, 8, 9]  # Default
         
     try:
         shoulder_months_list = [int(m.strip()) for m in shoulder_months.split(",") if m.strip()]
-    except:
+    except (ValueError, AttributeError, TypeError):
         shoulder_months_list = [4, 5, 10]  # Default
     
-    # Build TOU periods
+    # Build TOU periods - ensure all values are of the same type
     tou_periods = []
     for i in range(len(tou_starts)):
         if tou_starts[i] is not None and tou_ends[i] is not None and tou_rates[i] is not None:
-            tou_periods.append((tou_starts[i], tou_ends[i], tou_rates[i]))
+            # Convert all values to appropriate types
+            start = float(tou_starts[i])
+            end = float(tou_ends[i])
+            rate = str(tou_rates[i])
+            tou_periods.append((start, end, rate))
     
-    # Sort periods by start time
-    tou_periods = sorted(tou_periods)
+    # Sort periods by start time - using a key function to avoid type comparison
+    tou_periods.sort(key=lambda x: x[0])
     
     # Create utility parameters dictionary
     utility_params = {
@@ -2329,9 +2333,9 @@ def update_utility_params(
         "winter_months": winter_months_list,
         "summer_months": summer_months_list,
         "shoulder_months": shoulder_months_list,
-        "winter_multiplier": winter_mult,
-        "summer_multiplier": summer_mult,
-        "shoulder_multiplier": shoulder_mult
+        "winter_multiplier": winter_mult if winter_mult is not None else 1.0,
+        "summer_multiplier": summer_mult if summer_mult is not None else 1.0,
+        "shoulder_multiplier": shoulder_mult if shoulder_mult is not None else 1.0
     }
     
     return utility_params
