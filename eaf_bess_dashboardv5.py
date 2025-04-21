@@ -442,34 +442,50 @@ utility_rates = {
 
 def fill_tou_gaps(periods):
     """Fill gaps in TOU periods with off-peak rates"""
-    # Sort periods by start time
-    sorted_periods = sorted(periods)
+    # Handle empty periods
+    if not periods:
+        return [(0.0, 24.0, "off_peak")]
+    
+    # Convert all values to consistent types and sort
+    clean_periods = []
+    for period in periods:
+        try:
+            start = float(period[0])
+            end = float(period[1])
+            rate = str(period[2])
+            clean_periods.append((start, end, rate))
+        except (TypeError, ValueError, IndexError):
+            # Skip invalid periods
+            continue
+    
+    # Sort by start time
+    clean_periods.sort(key=lambda x: x[0])
+    
     filled_periods = []
     
     # Add period from 0 to first start if needed
-    if sorted_periods and sorted_periods[0][0] > 0:
-        filled_periods.append((0, sorted_periods[0][0], "off_peak"))
+    if clean_periods and clean_periods[0][0] > 0:
+        filled_periods.append((0.0, clean_periods[0][0], "off_peak"))
     
-    # Add all existing periods
-    filled_periods.extend(sorted_periods)
+    # Add existing periods
+    filled_periods.extend(clean_periods)
     
     # Fill gaps between periods
     i = 0
     while i < len(filled_periods) - 1:
         if filled_periods[i][1] < filled_periods[i + 1][0]:
             filled_periods.insert(i + 1, (filled_periods[i][1], filled_periods[i + 1][0], "off_peak"))
-            # Skip the newly inserted period in the next iteration
             i += 1
         i += 1
     
     # Add period from last end to 24 if needed
     if filled_periods and filled_periods[-1][1] < 24:
-        filled_periods.append((filled_periods[-1][1], 24, "off_peak"))
+        filled_periods.append((filled_periods[-1][1], 24.0, "off_peak"))
     
-    # Handle the case where no periods were provided
+    # Handle the case where filled_periods is still empty
     if not filled_periods:
-        filled_periods.append((0, 24, "off_peak"))
-        
+        filled_periods.append((0.0, 24.0, "off_peak"))
+    
     return filled_periods
 def get_month_season_multiplier(month, seasonal_data):
     """Determine the rate multiplier based on the month and seasonal configuration"""
@@ -3079,6 +3095,83 @@ def debug_display_results(n_clicks, eaf_params, bess_params, utility_params):
             html.P(str(e)),
             html.Pre(f"Error type: {type(e).__name__}")
         ], className="alert alert-danger")   
+@app.callback(
+    Output("results-output-container", "children"),
+    Input("calculate-results-button", "n_clicks"),
+    [State("utility-params-store", "data")],
+    prevent_initial_call=True
+)
+def debug_results(n_clicks, utility_params):
+    if n_clicks == 0:
+        return html.Div("Click Calculate Results to see debug information")
+    
+    try:
+        # If there are no utility parameters or TOU periods
+        if not utility_params or "tou_periods" not in utility_params:
+            utility_params = {}
+            utility_params["tou_periods"] = [(0.0, 24.0, "off_peak")]
         
+        # Get the TOU periods and try to fill gaps
+        tou_periods = utility_params.get("tou_periods", [])
+        
+        # Show the original TOU periods
+        original_display = html.Div([
+            html.H4("Original TOU Periods:"),
+            html.Pre(f"Type: {type(tou_periods)}"),
+            html.Pre(f"Value: {str(tou_periods)}"),
+        ])
+        
+        try:
+            # Try to fill gaps manually without using the function
+            filled_manually = []
+            
+            # Convert to consistent types and sort
+            clean_periods = []
+            for period in tou_periods:
+                try:
+                    start = float(period[0])
+                    end = float(period[1])
+                    rate = str(period[2])
+                    clean_periods.append((start, end, rate))
+                except (TypeError, ValueError, IndexError) as e:
+                    return html.Div([
+                        html.H3("Error in TOU Period Conversion"),
+                        html.Pre(f"Period: {period}"),
+                        html.Pre(f"Error: {str(e)}"),
+                        html.Pre(f"Error type: {type(e).__name__}")
+                    ], className="alert alert-danger")
+            
+            # Sort periods
+            clean_periods.sort(key=lambda x: x[0])
+            
+            manual_display = html.Div([
+                html.H4("Manually Cleaned TOU Periods:"),
+                html.Pre(f"Value: {str(clean_periods)}"),
+            ])
+            
+            return html.Div([
+                html.H3("TOU Period Debugging"),
+                original_display,
+                manual_display,
+                html.Div([
+                    html.H4("Hint:"),
+                    html.P("Check the TOU period types and make sure all values are properly converted to the right types.")
+                ])
+            ], className="card p-3")
+            
+        except Exception as e:
+            return html.Div([
+                html.H3("Error in Manual Fill"),
+                original_display,
+                html.Pre(f"Error: {str(e)}"),
+                html.Pre(f"Error type: {type(e).__name__}")
+            ], className="alert alert-danger")
+            
+    except Exception as e:
+        return html.Div([
+            html.H3("General Error"),
+            html.Pre(f"Error: {str(e)}"),
+            html.Pre(f"Error type: {type(e).__name__}")
+        ], className="alert alert-danger")        
 if __name__ == "__main__":
     app.run_server(host="0.0.0.0", port=8050, debug=False)
