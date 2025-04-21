@@ -2190,6 +2190,12 @@ app.layout = html.Div(
                                                     className="btn btn-primary mt-4 mb-3",
                                                 ),
                                                 html.Button(
+                                                    "Show Debug Info",
+                                                    id="debug-button",
+                                                    n_clicks=0,
+                                                    className="btn btn-warning mt-4 mb-3 ms-3",
+                                                ),
+                                                html.Button(
                                                     "Optimize Battery Size",
                                                     id="optimize-battery-button",
                                                     n_clicks=0,
@@ -2949,5 +2955,54 @@ def validate_inputs(
         }
     else:
         return "", {"display": "none"}
+@app.callback(
+    Output("results-output-container", "children"), 
+    Input("calculate-results-button", "n_clicks"),
+    [State("eaf-params-store", "data"),
+     State("bess-params-store", "data"),
+     State("utility-params-store", "data")],
+    prevent_initial_call=True
+)
+def debug_display_results(n_clicks, eaf_params, bess_params, utility_params):
+    if n_clicks == 0:
+        return html.Div("Click the Calculate Results button to see results")
+    
+    try:
+        # Try a basic calculation
+        if "tou_periods" in utility_params:
+            filled_periods = fill_tou_gaps(utility_params["tou_periods"])
+            utility_params_copy = utility_params.copy()
+            utility_params_copy["tou_periods"] = filled_periods
+            
+            # Calculate for one month
+            monthly_bill = create_monthly_bill_with_bess(
+                eaf_params, bess_params, utility_params_copy, 30, 1  # January
+            )
+            
+            return html.Div([
+                html.H3("Debug Results"),
+                html.H4("Original TOU Periods:"),
+                html.Pre(str(utility_params["tou_periods"])),
+                html.H4("Filled TOU Periods:"),
+                html.Pre(str(filled_periods)),
+                html.H4("Sample Monthly Bill (January):"),
+                html.Pre(str(monthly_bill))
+            ], className="card p-3")
+        
+        else:
+            return html.Div([
+                html.H3("Error"),
+                html.P("No TOU periods found in utility parameters"),
+                html.Pre(str(utility_params))
+            ])
+    
+    except Exception as e:
+        # Show any errors
+        return html.Div([
+            html.H3("Error"),
+            html.P(str(e)),
+            html.Pre(f"Error type: {type(e).__name__}")
+        ], className="alert alert-danger")   
+        
 if __name__ == "__main__":
     app.run_server(host="0.0.0.0", port=8050, debug=False)
