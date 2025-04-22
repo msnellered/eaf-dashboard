@@ -3391,37 +3391,31 @@ def modify_tou_rows(add_clicks, remove_clicks_list, current_rows):
     return new_rows
 
 
+import dash # Make sure dash is imported
+from dash import callback_context # Import callback_context
+
 # --- Input Validation Callback ---
 @app.callback(
-    [
-        Output("validation-error-container", "children"),
-        Output("validation-error-container", "style"),
-        Output("calculation-error-container", "style", allow_duplicate=True),
-    ],  # Also hide calc errors on re-validate
-    [
-        Input("calculate-results-button", "n_clicks"),  # Trigger on calc button
-        Input("optimize-battery-button", "n_clicks"),  # Trigger on optimize button
-        # Also trigger validation when relevant parameters change
-        Input("utility-params-store", "data"),
-        Input("eaf-params-store", "data"),
-        Input("bess-params-store", "data"),
-        Input("financial-params-store", "data"),
-        # Add key individual inputs if needed for faster feedback, e.g.
-        # Input({"type": "tou-start", "index": ALL}, "value"),
-        # Input({"type": "tou-end", "index": ALL}, "value"),
-    ],
+    [Output("validation-error-container", "children"),
+     Output("validation-error-container", "style"),
+     Output("calculation-error-container", "style", allow_duplicate=True)],
+    [Input("calculate-results-button", "n_clicks"), # Trigger on calc button
+     Input("optimize-battery-button", "n_clicks"), # Trigger on optimize button
+     # Keep store inputs to trigger validation when params change *after* load
+     Input("utility-params-store", "data"),
+     Input("eaf-params-store", "data"),
+     Input("bess-params-store", "data"),
+     Input("financial-params-store", "data"),
+     ],
     prevent_initial_call=True,
 )
-def validate_inputs(
-    calc_clicks, opt_clicks, utility_params, eaf_params, bess_params, fin_params
-):
+def validate_inputs(calc_clicks, opt_clicks, utility_params, eaf_params, bess_params, fin_params):
     """Validate inputs before running calculations or optimization."""
-    ctx = callback_context
-    # Determine if validation is triggered by a calculation attempt or param change
-    is_calc_attempt = ctx.triggered_id in [
-        "calculate-results-button",
-        "optimize-battery-button",
-    ]
+    ctx = dash.callback_context # Get callback context
+    triggered_id = ctx.triggered_id if ctx.triggered_id else 'initial_load_or_unknown' # Handle potential None
+
+    # Determine if validation is triggered by a calculation attempt
+    is_calc_attempt = triggered_id in ["calculate-results-button", "optimize-battery-button"]
 
     errors = []
     warnings = []
@@ -3430,44 +3424,43 @@ def validate_inputs(
     if not utility_params:
         errors.append("Utility parameters are missing.")
     else:
-        # Check TOU periods (using the 'filled' ones for coverage check)
         filled_periods = utility_params.get("tou_periods_filled", [])
         raw_periods = utility_params.get("tou_periods_raw", [])
 
+        # --- MODIFIED CHECK ---
+        # Only check for empty filled_periods if triggered by button or raw is also empty
+        # This prevents the error message purely from the initial empty filled list
         if not raw_periods:
-            errors.append("At least one Time-of-Use period must be defined.")
-        elif not filled_periods:
-            # This shouldn't happen if fill_tou_gaps works, but check anyway
-            errors.append(
-                "Error processing Time-of-Use periods (resulted in empty list)."
-            )
-        else:
-            # Check coverage (filled periods should always cover 0-24 if fill_tou_gaps is correct)
-            total_duration = sum(end - start for start, end, rate in filled_periods)
-            if not np.isclose(total_duration, 24.0):
-                warnings.append(
-                    f"Processed Time-of-Use periods do not cover exactly 24 hours (Total: {total_duration:.1f}h). Check for overlaps or input errors in raw periods."
-                )
+             errors.append("At least one Time-of-Use period must be defined in raw periods.")
+        # Check if filled_periods became empty *after* processing potentially valid raw_periods
+        elif not filled_periods and raw_periods:
+             # This might indicate an actual error in fill_tou_gaps or the raw data format
+             errors.append("Error processing Time-of-Use periods (resulted in empty filled list despite raw periods present). Check raw period format.")
+        # --- END MODIFIED CHECK ---
+        elif filled_periods: # Only check coverage if filled_periods exist
+             total_duration = sum(end - start for start, end, rate in filled_periods)
+             if not np.isclose(total_duration, 24.0):
+                 warnings.append(f"Processed Time-of-Use periods do not cover exactly 24 hours (Total: {total_duration:.1f}h). Check raw periods for overlaps/errors.")
 
-            # Check validity of raw periods provided by user
-            for i, p in enumerate(raw_periods):
-                if not (isinstance(p, (list, tuple)) and len(p) == 3):
-                    errors.append(f"TOU Period #{i+1} has incorrect format.")
-                    continue
-                start, end, rate = p
-                if start is None or end is None or rate is None:
-                    errors.append(f"TOU Period #{i+1} has missing values.")
-                try:
-                    start_f, end_f = float(start), float(end)
-                    if not (0 <= start_f < end_f <= 24):
-                        errors.append(
-                            f"TOU Period #{i+1} has invalid time range ({start_f}-{end_f}). Must be 0 <= start < end <= 24."
-                        )
-                except (ValueError, TypeError):
-                    errors.append(f"TOU Period #{i+1} has non-numeric start/end times.")
-                if rate not in ["peak", "mid_peak", "off_peak"]:
-                    errors.append(f"TOU Period #{i+1} has invalid rate type '{rate}'.")
+        # Keep the detailed checks for raw_periods format errors
+        for i, p in enumerate(raw_periods):
+            # ... (keep the existing detailed format checks for raw_periods) ...
+            if not (isinstance(p, (list,tuple)) and len(p)==3):
+                errors.append(f"TOU Period #{i+1} has incorrect format.")
+                continue
+            start, end, rate = p
+            if start is None or end is None or rate is None:
+                 errors.append(f"TOU Period #{i+1} has missing values.")
+            try:
+                 start_f, end_f = float(start), float(end)
+                 if not (0 <= start_f < end_f <= 24):
+                     errors.append(f"TOU Period #{i+1} has invalid time range ({start_f}-{end_f}). Must be 0 <= start < end <= 24.")
+            except (ValueError, TypeError):
+                 errors.append(f"TOU Period #{i+1} has non-numeric start/end times.")
+            if rate not in ["peak", "mid_peak", "off_peak"]:
+                 errors.append(f"TOU Period #{i+1} has invalid rate type '{rate}'.")
 
+        # ... (Keep the rest of the validation checks for seasonal, EAF, BESS, Financial) ...
         # Check seasonal months if enabled
         if utility_params.get("seasonal_rates"):
             w_m = utility_params.get("winter_months", [])
@@ -3475,106 +3468,77 @@ def validate_inputs(
             h_m = utility_params.get("shoulder_months", [])
             all_months = w_m + s_m + h_m
             if len(all_months) != len(set(all_months)):
-                errors.append(
-                    "Seasonal Months Error: Some months appear in multiple seasons."
-                )
+                errors.append("Seasonal Months Error: Some months appear in multiple seasons.")
             if not all(m in all_months for m in range(1, 13)):
-                errors.append(
-                    "Seasonal Months Error: Not all months (1-12) are assigned to a season."
-                )
+                errors.append("Seasonal Months Error: Not all months (1-12) are assigned to a season.")
             if not all(isinstance(m, int) and 1 <= m <= 12 for m in all_months):
-                errors.append(
-                    "Seasonal Months Error: Month lists contain invalid values."
-                )
+                 errors.append("Seasonal Months Error: Month lists contain invalid values.")
 
     # --- Validate EAF Params ---
-    if not eaf_params:
-        errors.append("EAF parameters are missing.")
+    # ... (keep EAF checks) ...
+    if not eaf_params: errors.append("EAF parameters are missing.")
     else:
-        if eaf_params.get("eaf_size", 0) <= 0:
-            errors.append("EAF Size must be positive.")
-        if eaf_params.get("cycle_duration", 0) <= 0:
-            errors.append("Cycle Duration must be positive.")
-        if eaf_params.get("cycles_per_day", 0) <= 0:
-            errors.append("Cycles per Day must be positive.")
-        if not (0 < eaf_params.get("days_per_year", 0) <= 366):
-            errors.append("Operating Days must be between 1 and 366.")
+        if eaf_params.get('eaf_size', 0) <= 0: errors.append("EAF Size must be positive.")
+        if eaf_params.get('cycle_duration_input', 0) <= 0: errors.append("Cycle Duration must be positive.")
+        if eaf_params.get('cycles_per_day', 0) <= 0: errors.append("Cycles per Day must be positive.")
+        if not (0 < eaf_params.get('days_per_year', 0) <= 366): errors.append("Operating Days must be between 1 and 366.")
+
 
     # --- Validate BESS Params ---
-    if not bess_params:
-        errors.append("BESS parameters are missing.")
+    # ... (keep BESS checks) ...
+    if not bess_params: errors.append("BESS parameters are missing.")
     else:
-        cap = bess_params.get("capacity", 0)
-        power = bess_params.get("power_max", 0)
-        if cap <= 0:
-            errors.append("BESS Capacity (MWh) must be positive.")
-        if power <= 0:
-            errors.append("BESS Power (MW) must be positive.")
+        cap = bess_params.get('capacity', 0)
+        power = bess_params.get('power_max', 0)
+        if cap <= 0: errors.append("BESS Capacity (MWh) must be positive.")
+        if power <= 0: errors.append("BESS Power (MW) must be positive.")
         if cap > 0 and power > 0:
             c_rate = power / cap
-            if not (0.1 <= c_rate <= 5):  # Wider warning range for C-rate
-                warnings.append(
-                    f"BESS C-Rate ({c_rate:.1f}) is unusual (Power {power} MW / Capacity {cap} MWh). Typical range is 0.25-2.0."
-                )
-        if not (0 < bess_params.get("rte", 0) <= 1):
-            errors.append(
-                "BESS RTE must be between 0 and 1 (check percentage conversion)."
-            )  # Check internal value (0-1)
-        if bess_params.get("cycle_life", 0) <= 0:
-            errors.append("BESS Cycle Life must be positive.")
-        if bess_params.get("cost_per_kwh", 0) <= 0:
-            errors.append("BESS Cost ($/kWh) must be positive.")
-        if bess_params.get("om_cost_per_kwh_year", 0) < 0:
-            errors.append("BESS O&M Cost cannot be negative.")
+            if not (0.1 <= c_rate <= 5): # Wider warning range for C-rate
+                warnings.append(f"BESS C-Rate ({c_rate:.1f}) is unusual (Power {power} MW / Capacity {cap} MWh). Typical range is 0.25-2.0.")
+        if not (0 < bess_params.get('rte', 0) <= 1): errors.append("BESS RTE must be between 0% and 100%.") # Check percentage input logic if RTE is stored 0-1
+        if bess_params.get('cycle_life', 0) <= 0: errors.append("BESS Cycle Life must be positive.")
+        if bess_params.get('cost_per_kwh', 0) <= 0: errors.append("BESS Cost ($/kWh) must be positive.")
+        if bess_params.get('om_cost_per_kwh_year', 0) < 0: errors.append("BESS O&M Cost cannot be negative.")
+
 
     # --- Validate Financial Params ---
-    if not fin_params:
-        errors.append("Financial parameters are missing.")
+    # ... (keep Financial checks - excluding interest/debt) ...
+    if not fin_params: errors.append("Financial parameters are missing.")
     else:
-        if not (0 <= fin_params.get("wacc", -1) < 1):
-            errors.append(
-                "WACC must be between 0% and 100%."
-            )  # Check internal value (0-1)
-        if fin_params.get("project_lifespan", 0) <= 0:
-            errors.append("Project Lifespan must be positive.")
-        if not (0 <= fin_params.get("tax_rate", -1) < 1):
-            errors.append("Tax Rate must be between 0% and 100%.")
-        if not (-0.1 <= fin_params.get("inflation_rate", -1) <= 1):
-            errors.append("Inflation Rate seems unusual (typical range -10% to 100%).")
-        if not (0 <= fin_params.get("salvage_value", -1) <= 1):
-            errors.append("Salvage Value must be between 0% and 100%.")
+        # Check WACC is 0-100% range (internal value 0-1)
+        if not (0 <= fin_params.get('wacc', -1) < 1): errors.append("WACC must be between 0% and 100%.")
+        if fin_params.get('project_lifespan', 0) <= 0: errors.append("Project Lifespan must be positive.")
+        # Check Tax Rate is 0-100% range (internal value 0-1)
+        if not (0 <= fin_params.get('tax_rate', -1) < 1): errors.append("Tax Rate must be between 0% and 100%.")
+        # Check Inflation Rate is plausible (internal value -0.1 to 1)
+        if not (-0.1 <= fin_params.get('inflation_rate', -1) <= 1): errors.append("Inflation Rate seems unusual (typical range -10% to 100%).")
+        # Check Salvage Value is 0-100% range (internal value 0-1)
+        if not (0 <= fin_params.get('salvage_value', -1) <= 1): errors.append("Salvage Value must be between 0% and 100%.")
+
 
     # --- Determine Output ---
     output_elements = []
-    display_style = {
-        "display": "none",
-        "max-width": "800px",
-        "margin": "10px auto",
-    }  # Base style
-    calc_error_style = {"display": "none"}  # Hide calc error display by default
+    display_style = {"display": "none", "max-width": "800px", "margin": "10px auto"}
+    calc_error_style = {"display": "none"}
 
     if errors:
-        output_elements.append(
-            html.H5("Validation Errors:", className="mb-2 text-danger")
-        )
+        output_elements.append(html.H5("Validation Errors:", className="mb-2 text-danger"))
         output_elements.append(html.Ul([html.Li(e) for e in errors]))
         display_style["display"] = "block"
-        display_style["border-color"] = "#f5c6cb"  # Red border
-        display_style["background-color"] = "#f8d7da"  # Light red background
-        display_style["color"] = "#721c24"  # Dark red text
+        display_style["border-color"] = "#f5c6cb"
+        display_style["background-color"] = "#f8d7da"
+        display_style["color"] = "#721c24"
+        if is_calc_attempt: calc_error_style = {"display": "none"}
     elif warnings:
-        output_elements.append(
-            html.H5("Validation Warnings:", className="mb-2 text-warning")
-        )
+        # Only show warnings if triggered by user action, not initial load/store changes
+        # Or always show warnings if desired. Let's show them always for now.
+        output_elements.append(html.H5("Validation Warnings:", className="mb-2 text-warning"))
         output_elements.append(html.Ul([html.Li(w) for w in warnings]))
         display_style["display"] = "block"
-        display_style["border-color"] = "#ffeeba"  # Yellow border
-        display_style["background-color"] = "#fff3cd"  # Light yellow background
-        display_style["color"] = "#856404"  # Dark yellow text
-
-    # If validation triggered by button click and there are errors, clear any previous calc errors
-    if is_calc_attempt and errors:
-        calc_error_style = {"display": "none"}
+        display_style["border-color"] = "#ffeeba"
+        display_style["background-color"] = "#fff3cd"
+        display_style["color"] = "#856404"
 
     return output_elements, display_style, calc_error_style
 
