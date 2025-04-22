@@ -93,26 +93,34 @@ app.title = "Battery Profitability Tool"
 
 # Default utility parameters
 default_utility_params = {
-    "energy_rates": {"off_peak": 50, "mid_peak": 100, "peak": 150},  # $/MWh
-    "demand_charge": 10,  # $/kW/month
-    "tou_periods_raw": [  # Raw input periods
-        (0, 8, "off_peak"),
-        (8, 10, "peak"),
-        (10, 16, "mid_peak"),
-        (16, 20, "peak"),
-        (20, 24, "off_peak"),
+    "energy_rates": {"off_peak": 50, "mid_peak": 100, "peak": 150},
+    "demand_charge": 10,
+    "tou_periods_raw": [ # Raw definition
+        (0.0, 8.0, "off_peak"), # Use floats for consistency
+        (8.0, 10.0, "peak"),
+        (10.0, 16.0, "mid_peak"),
+        (16.0, 20.0, "peak"),
+        (20.0, 24.0, "off_peak"),
     ],
-    
-    "tou_periods_filled": [],  # To be filled by callback
-    # Adding seasonal parameters
-    "seasonal_rates": False,  # Toggles seasonal rate differences
-    "winter_months": [11, 12, 1, 2, 3],  # Nov-Mar
-    "summer_months": [6, 7, 8, 9],  # Jun-Sep
-    "shoulder_months": [4, 5, 10],  # Apr-May, Oct
-    "winter_multiplier": 1.0,  # No change for winter
-    "summer_multiplier": 1.2,  # 20% higher in summer
-    "shoulder_multiplier": 1.1,  # 10% higher in shoulder seasons
+    # --- Manually define the default filled periods ---
+    "tou_periods_filled": [
+        (0.0, 8.0, "off_peak"),
+        (8.0, 10.0, "peak"),
+        (10.0, 16.0, "mid_peak"),
+        (16.0, 20.0, "peak"),
+        (20.0, 24.0, "off_peak"),
+     ],
+    # --- End definition ---
+    "seasonal_rates": False,
+    "winter_months": [11, 12, 1, 2, 3],
+    "summer_months": [6, 7, 8, 9],
+    "shoulder_months": [4, 5, 10],
+    "winter_multiplier": 1.0,
+    "summer_multiplier": 1.2,
+    "shoulder_multiplier": 1.1,
 }
+
+# --- ENSURE NO LINE AFTER THIS DICTIONARY TRIES TO CALL fill_tou_gaps() ---
 # Pre-fill the default filled periods
 # default_utility_params["tou_periods_filled"] = fill_tou_gaps(
 # default_utility_params["tou_periods_raw"]
