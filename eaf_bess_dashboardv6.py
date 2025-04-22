@@ -2483,70 +2483,37 @@ def navigate_tabs(n_params, n_incentives):
     ],  # Trigger on mill change too
     State("eaf-params-store", "data"),  # Keep existing data if only mill changes
 )
-@app.callback(
-    Output("eaf-params-store", "data"),
-    [Input("eaf-size", "value"),
-     Input("eaf-count", "value"),
-     Input("grid-cap", "value"),
-     Input("cycles-per-day", "value"),
-     Input("cycle-duration", "value"), # Input component value
-     Input("days-per-year", "value"),
-     Input("mill-selection-dropdown", "value")],
-    State("eaf-params-store", "data") # Get previous state
-)
-def update_eaf_params_store(size, count, grid_cap, cycles, duration, days, selected_mill, existing_data):
+def update_eaf_params_store(
+    size, count, grid_cap, cycles, duration, days, selected_mill, existing_data
+):
     ctx = callback_context
-    triggered_id = ctx.triggered_id if ctx.triggered_id else 'unknown'
+    trigger_id = ctx.triggered_id
 
-    # --- Default to existing data or Custom if no existing ---
-    output_data = existing_data.copy() if existing_data else nucor_mills["Custom"].copy()
-    # Ensure 'cycle_duration_input' exists in the base data
-    if "cycle_duration_input" not in output_data:
-         output_data["cycle_duration_input"] = output_data.get("cycle_duration", 0)
-
-
-    if triggered_id == "mill-selection-dropdown":
-        # Load data fully from the selected mill's definition
+    if trigger_id == "mill-selection-dropdown":
+        # If mill changed, load data for that mill
         if selected_mill and selected_mill in nucor_mills:
-            mill_data = nucor_mills[selected_mill].copy()
-            # Ensure cycle_duration_input is set correctly when loading preset
-            mill_data["cycle_duration_input"] = mill_data.get("cycle_duration", 0)
-            output_data = mill_data # Overwrite with mill data
-        else:
-            # Load Custom defaults if dropdown selection is invalid or "Custom"
-            custom_data = nucor_mills["Custom"].copy()
-            custom_data["cycle_duration_input"] = custom_data.get("cycle_duration", 0)
-            output_data = custom_data # Overwrite with custom data
-
+            return nucor_mills[selected_mill]
+        else:  # Default to custom if selection invalid or "Custom"
+            return nucor_mills["Custom"]
     else:
-        # --- Update based on individual input changes (e.g., cycle-duration input) ---
-        # Create a dictionary of updates from the individual input arguments
-        updates = {
-            "eaf_size": size,
-            "eaf_count": count,
-            "grid_cap": grid_cap,
-            "cycles_per_day": cycles,
-            # Handle cycle duration carefully:
-            # Use the new 'duration' value ONLY if it's not None, otherwise keep existing
-            "cycle_duration": duration if duration is not None else output_data.get("cycle_duration"),
-            "cycle_duration_input": duration if duration is not None else output_data.get("cycle_duration_input"), # Use the valid duration value
-            "days_per_year": days,
-        }
-        # Apply the updates to the output data
-        output_data.update(updates)
-        # --- Ensure cycle_duration_input is positive if duration is None ---
-        # If duration became None, ensure cycle_duration_input isn't None or zero if cycle_duration is positive
-        if duration is None and output_data.get("cycle_duration_input") is None:
-             output_data["cycle_duration_input"] = output_data.get("cycle_duration", 0)
-
-
-    # Final safety check: ensure cycle_duration_input is non-negative
-    if output_data.get("cycle_duration_input") is None or output_data.get("cycle_duration_input") < 0 :
-         # Fallback to cycle_duration or 0 if necessary
-         output_data["cycle_duration_input"] = output_data.get("cycle_duration", 0)
-
-
-    return output_data
+        # If a specific input changed, update the store
+        # Use existing_data as base to handle partial updates if needed
+        updated_data = (
+            existing_data.copy() if existing_data else nucor_mills["Custom"].copy()
+        )
+        updated_data.update(
+            {
+                "eaf_size": size,
+                "eaf_count": count,
+                "grid_cap": grid_cap,
+                "cycles_per_day": cycles,
+                "cycle_duration": duration,  # Store the average/base duration
+                "cycle_duration_input": duration,  # Store the user input specifically
+                "days_per_year": days,
+                # Keep other mill-specific data like location, type if loaded previously
+            }
+        )
+        return updated_data
 
 
 # Callback to update BESS params store
