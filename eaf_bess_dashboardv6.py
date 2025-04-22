@@ -570,7 +570,7 @@ utility_rates = {
         "Kentucky Utilities": { # For Gallatin
              # Rate details unavailable/inaccessible in provided PDFs [cite: 78507, 78522]
              # Using Custom Utility defaults as placeholder
-         
+             # Inherit defaults
         },
         "Mississippi County Electric Cooperative": { # For Hickman, Nucor-Yamato
             "energy_rates": {"off_peak": 32.72, "mid_peak": 32.72, "peak": 32.72}, # Flat rate ($/MWh) [cite: 78532]
@@ -599,7 +599,7 @@ utility_rates = {
         "Oncor Electric Delivery": { # For Texas (Jewett) - TDU ONLY
             # Represents Delivery charges only. Energy cost depends on separate REP contract. [cite: 78604, 78627]
             # Using Custom Utility defaults as placeholder for combined rate structure.
-             **utility_rates["Custom Utility"]
+            
         },
         "UniSource Energy Services": { # For Kingman
             # Rates from E-38 LGP [cite: 79202]
@@ -623,7 +623,7 @@ utility_rates = {
         "AEP Ohio": { # For Marion - Distribution ONLY
             # Represents Delivery charges only. Energy cost depends on separate CRES/SSO rates. [cite: 79111, 79274]
             # Using Custom Utility defaults as placeholder for combined rate structure.
-             **utility_rates["Custom Utility"]
+            
         },
         "Nebraska Public Power District": { # For Nebraska (Norfolk)
             # Rates from LIS [cite: 78556]
@@ -693,7 +693,7 @@ utility_rates = {
         # },
         "Duke Energy Florida": { # For Florida (Frostproof)
              # Rate details unavailable/inaccessible in provided PDFs [cite: 78799, 78801]
-            
+             # Placeholder
         },
         "Entergy Mississippi (Assumed)": { # For Jackson
             # Rates from LGS-TOU [cite: 79177]
@@ -717,7 +717,25 @@ utility_rates = {
         # --- End Additions ---
     "Custom Utility": default_utility_params,  # Reference the default dict
 }
+# --- Add these lines AFTER the utility_rates dictionary is fully defined ---
+placeholder_utilities = [
+    "Kentucky Utilities",
+    "Oncor Electric Delivery",
+    "AEP Ohio",
+    "Duke Energy Florida",
+    # Add any other keys you left as placeholders above, e.g.:
+    # "Duke Energy Carolinas",
+    # "Eversource Energy",
+    # "Memphis Light, Gas and Water (MLGW) (Assumed)",
+]
 
+for util_key in placeholder_utilities:
+    if util_key in utility_rates: # Check if key exists
+        # Use .update() to merge defaults without overwriting if needed later
+        # Or simply assign if you want a direct copy:
+        utility_rates[util_key] = utility_rates["Custom Utility"].copy()
+
+# --- End of added update code ---
 # --- Helper Functions ---
 
 
