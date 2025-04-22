@@ -131,12 +131,12 @@ default_bess_params = {
 # Source for Nucor-specific defaults below: User provided, attributed to 2024 Nucor 10k
 default_financial_params = {
     "wacc": 0.131,           # 13.1% Weighted Average Cost of Capital (Updated)
-    "interest_rate": 0.04,   # 4% Interest rate for debt (Original default - not updated by request)
-    "debt_fraction": 0.5,    # 50% of BESS cost financed (Original default - not updated by request)
+    # "interest_rate": 0.04,   # Removed - Handled within WACC
+    # "debt_fraction": 0.5,    # Removed - Handled within WACC
     "project_lifespan": 30,  # 30 years (Updated)
     "tax_rate": 0.2009,      # 20.09% Effective Tax Rate (Updated)
     "inflation_rate": 0.024, # 2.4% Inflation Rate (Updated)
-    "salvage_value": 0.1,    # 10% of BESS cost at end (Original default - not updated by request)
+    "salvage_value": 0.1,    # 10% of BESS cost at end (Original default)
 }
 
 # New incentive parameters
@@ -969,204 +969,165 @@ def calculate_incentives(bess_params, incentive_params):
     return {"total_incentive": total_incentive, "breakdown": incentive_breakdown}
 
 
-# Improved financial metrics calculation
+# Improved financial metrics calculation (Corrected Version Apr 21, 2025)
 def calculate_financial_metrics(
     bess_params, financial_params, eaf_params, annual_savings, incentives
 ):
-    """Calculate NPV, IRR, payback period, etc. with incentives included"""
-    # Initial investment calculation
-    capacity_kwh = bess_params.get("capacity", 0) * 1000  # Convert MWh to kWh
+    """Calculate NPV, IRR, payback period, etc. with incentives included,
+       using WACC for discounting and handling recurring replacements."""
+
+    # --- Get Parameters ---
+    # BESS Parameters
+    capacity_kwh = bess_params.get("capacity", 0) * 1000
     cost_per_kwh = bess_params.get("cost_per_kwh", 0)
-    bess_cost = capacity_kwh * cost_per_kwh  # Initial BESS hardware cost
-
     om_cost_per_kwh_year = bess_params.get("om_cost_per_kwh_year", 0)
-    initial_om_cost = capacity_kwh * om_cost_per_kwh_year  # O&M cost in year 1
-
-    # Adjust initial cost by incentives (applied at year 0)
-    net_initial_cost = bess_cost - incentives.get("total_incentive", 0)
-    if net_initial_cost < 0:
-        # This implies incentives > upfront cost, which might happen.
-        # Treat it as positive cash flow at year 0 for calculations.
-        print("Warning: Total incentives exceed initial BESS cost.")
-
-    # Financial parameters
-    project_years = financial_params.get("project_lifespan", 10)
-    inflation_rate = financial_params.get("inflation_rate", 0.02)
-    wacc = financial_params.get("wacc", 0.06)
-    tax_rate = financial_params.get("tax_rate", 0.25)
-    salvage_value_fraction = financial_params.get(
-        "salvage_value", 0.1
-    )  # Fraction of *original* cost
-
-    # Calculate battery replacement timing
-    days_per_year = eaf_params.get("days_per_year", 300)  # Get from EAF params
-    cycles_per_day = eaf_params.get("cycles_per_day", 24)  # Get from EAF params
     cycle_life = bess_params.get("cycle_life", 5000)
 
-    if days_per_year <= 0 or cycles_per_day <= 0:
+    # Financial Parameters (using .get for safety)
+    years = int(financial_params.get("project_lifespan", 30)) # Ensure integer
+    wacc = financial_params.get("wacc", 0.131)
+    inflation_rate = financial_params.get("inflation_rate", 0.024)
+    tax_rate = financial_params.get("tax_rate", 0.2009)
+    salvage_fraction = financial_params.get("salvage_value", 0.1)
+    # Note: interest_rate and debt_fraction are no longer used
+
+    # EAF Parameters for battery life calculation
+    days_per_year = eaf_params.get("days_per_year", 300)
+    cycles_per_day = eaf_params.get("cycles_per_day", 24)
+
+    # --- Initial Calculations ---
+    bess_cost = capacity_kwh * cost_per_kwh # Initial BESS hardware cost
+    initial_om_cost = capacity_kwh * om_cost_per_kwh_year # O&M cost in year 1
+    net_initial_cost = bess_cost - incentives.get("total_incentive", 0) # Cost after year 0 incentives
+
+    if net_initial_cost < 0:
+        print("Warning: Total incentives exceed initial BESS cost.")
+
+    # --- Battery Life Calculation ---
+    if days_per_year <= 0 or cycles_per_day <= 0 or cycle_life <= 0:
         cycles_per_year = 0
-        battery_life_years = float("inf")  # Avoid division by zero
+        battery_life_years = float('inf')
     else:
         cycles_per_year = cycles_per_day * days_per_year
-        battery_life_years = (
-            cycle_life / cycles_per_year if cycles_per_year > 0 else float("inf")
-        )
+        battery_life_years = cycle_life / cycles_per_year
 
-    # Cash flow array
-    # Year 0: Net initial cost (negative)
-    cash_flows = [-net_initial_cost]
+    # --- Cash Flow Calculation Loop ---
+    cash_flows = [-net_initial_cost]  # Year 0: Net initial investment
 
-    # Track if battery has been replaced and when
-    replacement_year = -1
+    for year in range(1, years + 1):
+        # Inflated Savings and O&M Costs
+        savings_t = annual_savings * ((1 + inflation_rate) ** (year - 1))
+        o_m_cost_t = initial_om_cost * ((1 + inflation_rate) ** (year - 1))
 
-    for year in range(1, project_years + 1):
-        # Savings adjusted for inflation (assume savings inflate)
-        # Using year-1 because year 1 savings are 'annual_savings' without inflation adjustment yet
-        inflated_savings = annual_savings * ((1 + inflation_rate) ** (year - 1))
-
-        # O&M costs adjusted for inflation
-        inflated_om_costs = initial_om_cost * ((1 + inflation_rate) ** (year - 1))
-
-        # --- Corrected Battery Replacement Logic ---
+        # Corrected Recurring Replacement Cost Logic
         replacement_cost_year = 0
-        # Check if a replacement cycle is completed *before or during* this year
-        # If battery_life_years is > 0, check if the current year exceeds the threshold
-        # of the last replacement + battery_life_years
-        # We need to track how many full battery lives have passed.
-
-        # Calculate how many replacements *should have happened* by the START of the current year
-        replacements_due_by_last_year = 0
         if battery_life_years > 0:
+             # Replacements due by start of year vs end of year
              replacements_due_by_last_year = np.floor((year - 1) / battery_life_years)
-
-        # Calculate how many replacements *should have happened* by the END of the current year
-        replacements_due_by_this_year = 0
-        if battery_life_years > 0:
              replacements_due_by_this_year = np.floor(year / battery_life_years)
 
-        # If the number of replacements due increases during this year, a replacement cost occurs
-        if replacements_due_by_this_year > replacements_due_by_last_year:
-            # Calculate inflated replacement cost occurring in this year
-            # Assumes replacement happens at the beginning of the year after life is exceeded
-            inflated_replacement_cost = bess_cost * ((1 + inflation_rate) ** (year - 1))
+             if replacements_due_by_this_year > replacements_due_by_last_year:
+                 inflated_replacement_cost = bess_cost * ((1 + inflation_rate) ** (year - 1))
+                 # Assuming no incentives on replacement cost
+                 replacement_cost_year = inflated_replacement_cost
+                 # print(f"DEBUG: Battery replacement cost ${replacement_cost_year:,.0f} applied in year {year}") # Optional
 
-            # Apply incentives? (Using 0% for now, adjust if needed)
-            replacement_incentive_fraction = 0.0
-            replacement_incentives = incentives.get("total_incentive", 0) * replacement_incentive_fraction
-            net_replacement_cost = inflated_replacement_cost - replacement_incentives
+        # EBT (Earnings Before Tax) - Simplified (no depreciation)
+        ebt = savings_t - o_m_cost_t - replacement_cost_year
 
-            replacement_cost_year = net_replacement_cost
-            print(f"DEBUG: Battery replacement cost ${replacement_cost_year:,.0f} applied in year {year}") # Optional debug print
-        # --- End of Corrected Replacement Logic ---
+        # Taxes
+        taxes = ebt * tax_rate if ebt > 0 else 0
 
-        # Calculate Salvage Value in the final year
-        salvage_value_year = 0
-        if year == project_years:
+        # Net Cash Flow (After Tax, Before Salvage)
+        net_cash_flow = savings_t - o_m_cost_t - replacement_cost_year - taxes
+
+        # Corrected Salvage Value Logic (Applied ONLY in the final year)
+        if year == years:
+            salvage_value_year = 0 # Start with 0 salvage for this year
             # Base salvage on the *original* cost, inflated to the final year
             inflated_original_cost = bess_cost * ((1 + inflation_rate) ** (year - 1))
-            base_salvage = inflated_original_cost * salvage_value_fraction
+            base_salvage = inflated_original_cost * salvage_fraction
 
-             # Calculate age of the battery operating in the final year
-            age_of_final_battery = project_years # Default if never replaced
+            # Calculate age of the battery operating in the final year
+            age_of_final_battery = years
             if battery_life_years > 0:
-                 # Find the start year of the last battery installed
-                 num_prior_replacements = np.floor(project_years / battery_life_years)
-                 last_replacement_start_year = num_prior_replacements * battery_life_years
-                 # Age is time elapsed since it was installed (relative to project start = 0)
-                 age_of_final_battery = project_years - last_replacement_start_year
+                 num_prior_replacements = np.floor(years / battery_life_years)
+                 # When the last battery was installed (relative to project start time 0)
+                 last_replacement_install_time = num_prior_replacements * battery_life_years
+                 age_of_final_battery = years - last_replacement_install_time
 
             # Calculate remaining life fraction
             remaining_life_fraction = 0.0
             if battery_life_years > 0:
                  remaining_life_fraction = max(0, 1 - (age_of_final_battery / battery_life_years))
 
-            salvage_value_year = base_salvage * remaining_life_fraction
+            # Calculate raw salvage and after-tax salvage
+            raw_salvage_value = base_salvage * remaining_life_fraction
+            # Assume salvage taxed as ordinary income (simplification)
+            salvage_after_tax = raw_salvage_value * (1 - tax_rate)
+            salvage_value_year = salvage_after_tax
+            # print(f"DEBUG: Salvage Value: Base=${base_salvage:,.0f}, Final Age={age_of_final_battery:.1f}yrs, Frac={remaining_life_fraction:.2f}, Applied=${salvage_value_year:,.0f}") # Optional
 
-        # --- Calculate Pre-Tax Cash Flow ---
-        pre_tax_cash_flow = (
-            inflated_savings
-            - inflated_om_costs
-            - replacement_cost_year
-            + salvage_value_year
-        )
+            # Add the calculated after-tax salvage to the net cash flow for THIS final year
+            net_cash_flow += salvage_value_year
 
-        # --- Tax Calculation (Simplified) ---
-        # Assumes savings are taxable revenue, O&M is deductible.
-        # Depreciation is not modeled here but is crucial for real tax calculations.
-        # Replacement cost might be capitalized & depreciated, or expensed (depends). Salvage value triggers tax gain/loss.
-        # For this model: Tax = (Savings - O&M) * TaxRate
-        # This ignores depreciation, replacement cost treatment, and salvage tax effects.
-        taxable_income_simplified = inflated_savings - inflated_om_costs
-        tax_effect = taxable_income_simplified * tax_rate
-        # A negative tax effect increases cash flow (tax shield)
-
-        # --- After-Tax Cash Flow ---
-        # Note: Replacement cost and salvage value impact on taxes are ignored here.
-        after_tax_cash_flow = pre_tax_cash_flow - tax_effect
-
-        cash_flows.append(after_tax_cash_flow)
+        # Append the calculated cash flow for the current year
+        cash_flows.append(net_cash_flow)
+    # --- End of Cash Flow Loop ---
 
     # --- Calculate Financial Metrics ---
-    npv = float("nan")
-    irr = float("nan")
+    npv = float('nan')
+    irr = float('nan')
     try:
-        # Ensure wacc is valid for npf.npv
         if wacc > -1:
-            npv = npf.npv(wacc, cash_flows)
+             npv = npf.npv(wacc, cash_flows)
         else:
-            print("Warning: WACC <= -1, cannot calculate NPV.")
+             print("Warning: WACC <= -1, cannot calculate NPV.")
     except Exception as e:
         print(f"Error calculating NPV: {e}")
-        # npv remains 'nan'
 
     try:
-        # npf.irr needs at least one sign change (usually negative year 0, positive later)
-        if (
-            cash_flows
-            and len(cash_flows) > 1
-            and cash_flows[0] < 0
-            and any(cf > 0 for cf in cash_flows[1:])
-        ):
+        # Check for valid cash flow pattern for IRR calculation
+        if cash_flows and len(cash_flows) > 1 and cash_flows[0] < 0 and any(cf > 0 for cf in cash_flows[1:]):
             irr = npf.irr(cash_flows)
+            # npf.irr might return nan if it fails to converge
+            if irr is None or np.isnan(irr): irr = float("nan")
         else:
-            print(
-                "Warning: Cannot calculate IRR. Cash flows might not change sign or are insufficient."
-            )
+             # If pattern invalid (e.g., no sign change, all negative), IRR is undefined or meaningless
+             irr = float('nan')
     except Exception as e:
+        # Catch potential errors during IRR calculation
         print(f"Error calculating IRR: {e}")
-        # irr remains 'nan'
+        irr = float('nan')
 
-    # Simple Payback (based on after-tax cash flows, ignoring time value)
-    cumulative_cash_flow = cash_flows[0]  # Start with initial investment (negative)
-    payback_years = float("inf")  # Default if never pays back
+    # --- Payback Period Calculation ---
+    cumulative_cash_flow = cash_flows[0] # Initial investment (usually negative)
+    payback_years = float('inf') # Default if never pays back
 
-    if (
-        cumulative_cash_flow >= 0
-    ):  # Pays back immediately (Year 0 due to high incentives)
+    if cumulative_cash_flow >= 0: # Pays back immediately (Year 0 due to high incentives > cost)
         payback_years = 0.0
     else:
-        for year in range(1, len(cash_flows)):
-            # If adding this year's cash flow makes it non-negative
-            if cumulative_cash_flow + cash_flows[year] >= 0:
-                # Fractional year calculation
-                fraction_needed = (
-                    abs(cumulative_cash_flow) / cash_flows[year]
-                    if cash_flows[year] > 0
-                    else 0
-                )
-                payback_years = (year - 1) + fraction_needed
-                break  # Found payback
-            cumulative_cash_flow += cash_flows[year]  # Add this year's flow
+        # Iterate through years 1 to end
+        for year_pbk in range(1, len(cash_flows)):
+            current_year_cf = cash_flows[year_pbk]
+            # Check if adding this year's cash flow makes cumulative non-negative
+            if cumulative_cash_flow + current_year_cf >= 0:
+                # Calculate fractional year if CF is positive
+                fraction_needed = abs(cumulative_cash_flow) / current_year_cf if current_year_cf > 0 else 0
+                payback_years = (year_pbk - 1) + fraction_needed
+                break # Payback found
+            cumulative_cash_flow += current_year_cf # Add this year's flow
 
+    # --- Return Results ---
     return {
         "npv": npv,
         "irr": irr,
         "payback_years": payback_years,
-        "cash_flows": cash_flows,  # After-tax cash flows
-        "net_initial_cost": net_initial_cost,  # Cost after year 0 incentives
+        "cash_flows": cash_flows,
+        "net_initial_cost": net_initial_cost,
         "battery_life_years": battery_life_years,
-        "annual_savings_year1": annual_savings,  # Base savings
-        "initial_om_cost_year1": initial_om_cost,  # Base O&M
+        "annual_savings_year1": annual_savings, # Base savings for reference
+        "initial_om_cost_year1": initial_om_cost, # Base O&M for reference
     }
 
 
