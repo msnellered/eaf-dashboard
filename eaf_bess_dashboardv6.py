@@ -86,7 +86,7 @@ app = dash.Dash(
 )
 server = app.server
 
-app.title = "EAF-BESS Peak Shaving Dashboard V5 (Nucor Facilities)"
+app.title = "Battery Profitability Tool"
 
 # --- Default Parameters ---
 # These will be used as fallbacks and for the custom option
@@ -264,7 +264,7 @@ nucor_mills = {
         "utility": "Dominion Energy",
         "grid_cap": 45,
     },
-    "Indiana": {
+    "Crawfordsville": {
         "location": "Crawfordsville, IN",
         "type": "Sheet",
         "eaf_count": 2,
@@ -278,7 +278,7 @@ nucor_mills = {
         "utility": "Duke Energy",
         "grid_cap": 40,
     },
-    "South Carolina": {
+    "Darlington": {
         "location": "Darlington, SC",
         "type": "Bar",
         "eaf_count": 1,
@@ -1256,7 +1256,7 @@ app.layout = html.Div(
         html.Div(
             [
                 html.H1(
-                    "EAF-BESS Peak Shaving Dashboard", className="mb-4 text-center"
+                    "Battery Profitability Tool", className="mb-4 text-center"
                 ),
                 # Container for validation errors/warnings
                 html.Div(
