@@ -716,7 +716,7 @@ app.layout = dbc.Container(fluid=True, className="bg-light min-vh-100 py-4", chi
 
         # Parameters Tab (Modify BESS section)
         dbc.Tab(label="2. System Parameters", tab_id="tab-params", children=[
-            dbc.Container(py=4, children=[
+            dbc.Container(children=[
                 dbc.Row([
                     # Left Column: Utility & EAF (keep as is)
                     dbc.Col(md=6, children=[
