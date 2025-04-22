@@ -3715,7 +3715,46 @@ def display_calculation_results(
                 "incentive": incentive_params,
             },
         }
+        # --- Add this block inside display_calculation_results ---
+        # --- Single Cycle Profile Calculation for Plot ---
+        try:
+            # Use the actual cycle duration input by the user for the time axis
+            plot_cycle_duration_min = eaf_params.get("cycle_duration_input", 36)
+            if plot_cycle_duration_min <= 0: plot_cycle_duration_min = 36 # Fallback
 
+            # Define time axis for the plot
+            time_plot = np.linspace(0, plot_cycle_duration_min, 200) # 200 points over the cycle duration
+
+            # Calculate EAF profile for the plot
+            eaf_power_plot = calculate_eaf_profile(
+                time_plot,
+                eaf_params.get("eaf_size", 100),
+                plot_cycle_duration_min # Pass actual duration
+            )
+
+            # Calculate Grid/BESS contribution for the plot
+            grid_power_plot, bess_power_plot = calculate_grid_bess_power(
+                eaf_power_plot,
+                eaf_params.get("grid_cap", 35),
+                bess_params.get("power_max", 20)
+            )
+            plot_data_calculated = True
+            max_y_plot = max(np.max(eaf_power_plot) if len(eaf_power_plot)>0 else 0, eaf_params.get("grid_cap", 35)) * 1.15
+            if max_y_plot <=0: max_y_plot = 60 # Ensure positive range
+
+        except Exception as plot_err:
+            plot_data_calculated = False
+            plot_error_message = f"Error generating single cycle plot data: {plot_err}"
+            print(plot_error_message) # Log error
+            # Initialize empty arrays or handle error in plot generation below
+            time_plot, eaf_power_plot, grid_power_plot, bess_power_plot = [], [], [], []
+            max_y_plot = 60
+        # --- End of added block ---
+
+        # --- Format Results for Display ---
+        # (Your existing code for cards, tables, cash flow graph follows)
+        # ...
+        
         # --- Format Results for Display ---
 
         # Helper to format currency
@@ -3963,7 +4002,55 @@ def display_calculation_results(
             plot_bgcolor="white",
             margin=dict(l=40, r=20, t=40, b=30),  # Adjust margins
         )
+        # --- Add this block for generating the Single Cycle Plot ---
+        fig_single_cycle = go.Figure()
 
+        if plot_data_calculated:
+            fig_single_cycle.add_trace(go.Scatter(
+                x=time_plot, y=eaf_power_plot, mode='lines', name='EAF Power Demand',
+                line=dict(color='blue', width=2)
+            ))
+            fig_single_cycle.add_trace(go.Scatter(
+                x=time_plot, y=grid_power_plot, mode='lines', name='Grid Power Supply',
+                line=dict(color='green', width=2)
+            ))
+            fig_single_cycle.add_trace(go.Scatter(
+                x=time_plot, y=bess_power_plot, mode='lines', name='BESS Power Output',
+                line=dict(color='red', width=2), fill='tozeroy' # Fill BESS area
+            ))
+            # Add Grid Cap line
+            fig_single_cycle.add_shape(
+                type="line", x0=0, y0=eaf_params.get("grid_cap", 35),
+                x1=plot_cycle_duration_min, y1=eaf_params.get("grid_cap", 35),
+                line=dict(color='black', width=2, dash='dash'), name='Grid Cap'
+            )
+            # Add annotation for Grid Cap
+            fig_single_cycle.add_annotation(
+                x=plot_cycle_duration_min * 0.9, # Position near the end
+                y=eaf_params.get("grid_cap", 35) + max_y_plot * 0.03, # Slightly above the line
+                text=f"Grid Cap ({eaf_params.get('grid_cap', 35)} MW)",
+                showarrow=False, font=dict(color='black', size=10)
+            )
+        else:
+            # Display an error message on the plot if data failed
+             fig_single_cycle.update_layout(
+                  xaxis = {'visible': False}, yaxis = {'visible': False},
+                  annotations = [{'text': 'Error generating plot data', 'xref': 'paper', 'yref': 'paper', 'showarrow': False, 'font': {'size': 16}}]
+             )
+
+
+        fig_single_cycle.update_layout(
+            title=f'Simulated EAF Cycle Profile ({eaf_params.get("eaf_size", "N/A")}-ton)',
+            xaxis_title=f"Time in Cycle (minutes, Duration: {plot_cycle_duration_min:.1f} min)",
+            yaxis_title="Power (MW)",
+            yaxis_range=[0, max_y_plot],
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            template="plotly_white",
+            margin=dict(l=40, r=20, t=50, b=40)
+        )
+        # --- End of added block ---
+        
         # Assemble the results layout
         results_output = html.Div(
             [
@@ -3980,6 +4067,11 @@ def display_calculation_results(
                 ),
                 html.H4("Monthly Billing Breakdown", className="mb-3"),
                 monthly_table,
+                
+                 # --- Add the Single Cycle Graph Here ---
+                html.H4("Single Cycle Power Profile", className="mt-4 mb-3"),
+                dcc.Graph(figure=fig_single_cycle),
+                
                 html.H4("Cash Flow Analysis", className="mt-4 mb-3"),
                 dcc.Graph(figure=fig_cashflow),
             ]
