@@ -5,3 +5,4 @@ numpy-financial
 gunicorn
 pandas
 Dash-table
+Dash-bootstrap-components
