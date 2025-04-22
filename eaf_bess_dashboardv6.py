@@ -128,14 +128,15 @@ default_bess_params = {
 }
 
 # Default financial parameters
+# Source for Nucor-specific defaults below: User provided, attributed to 2024 Nucor 10k
 default_financial_params = {
-    "wacc": 0.06,  # 6% Weighted Average Cost of Capital
-    "interest_rate": 0.04,  # 4% Interest rate for debt
-    "debt_fraction": 0.5,  # 50% of BESS cost financed
-    "project_lifespan": 10,  # 10 years
-    "tax_rate": 0.25,  # 25% tax rate
-    "inflation_rate": 0.02,  # 2% inflation
-    "salvage_value": 0.1,  # 10% of BESS cost at end
+    "wacc": 0.131,           # 13.1% Weighted Average Cost of Capital (Updated)
+    "interest_rate": 0.04,   # 4% Interest rate for debt (Original default - not updated by request)
+    "debt_fraction": 0.5,    # 50% of BESS cost financed (Original default - not updated by request)
+    "project_lifespan": 30,  # 30 years (Updated)
+    "tax_rate": 0.2009,      # 20.09% Effective Tax Rate (Updated)
+    "inflation_rate": 0.024, # 2.4% Inflation Rate (Updated)
+    "salvage_value": 0.1,    # 10% of BESS cost at end (Original default - not updated by request)
 }
 
 # New incentive parameters
