@@ -822,7 +822,7 @@ app.layout = dbc.Container(fluid=True, className="bg-light min-vh-100 py-4", chi
 
         # Incentives Tab (keep as is)
         dbc.Tab(label="3. Battery Incentives", tab_id="tab-incentives", children=[
-            dbc.Container(py=4, children=[
+            dbc.Container(children=[
                  html.H3("Battery Incentive Programs", className="mb-4 text-center"),
                  html.P("Select applicable incentives. Ensure values are correct for your location/project.", className="text-muted mb-4 text-center"),
                  # ... (Incentive layout remains the same) ...
@@ -861,7 +861,7 @@ app.layout = dbc.Container(fluid=True, className="bg-light min-vh-100 py-4", chi
 
         # Results Tab (keep as is)
         dbc.Tab(label="4. Results & Analysis", tab_id="tab-results", children=[
-            dbc.Container(py=4, children=[
+            dbc.Container(children=[
                 dcc.Loading(id="loading-results", type="circle", children=[html.Div(id="results-output-container", className="mt-4")])
             ])
         ]), # End Tab 4
