@@ -113,9 +113,9 @@ default_utility_params = {
     "shoulder_multiplier": 1.1,  # 10% higher in shoulder seasons
 }
 # Pre-fill the default filled periods
-default_utility_params["tou_periods_filled"] = fill_tou_gaps(
-    default_utility_params["tou_periods_raw"]
-)
+# default_utility_params["tou_periods_filled"] = fill_tou_gaps(
+# default_utility_params["tou_periods_raw"]
+
 
 # Default BESS parameters
 default_bess_params = {
