@@ -314,6 +314,96 @@ nucor_mills = {
         "utility": "Alabama Power",
         "grid_cap": 48,
     },
+    # --- Start Additions based on PDF Data ---
+        "Gallatin": {
+            "location": "Ghent, KY", "type": "Sheet", "eaf_count": 2, "eaf_type": "?", # EAF Type not specified clearly
+            "eaf_manufacturer": "NKK-SE, Danieli", "eaf_size": 175, "cycles_per_day": 27, "tons_per_year": 2800000,
+            "days_per_year": 300, "cycle_duration": 36, "utility": "Kentucky Utilities", "grid_cap": 53, # Est: 175 * 0.3
+        },
+        "Hickman": {
+            "location": "Hickman, AR", "type": "Sheet", "eaf_count": 2, "eaf_type": "AC",
+            "eaf_manufacturer": "MAN GHH", "eaf_size": 150, "cycles_per_day": 22, "tons_per_year": 2000000,
+            "days_per_year": 300, "cycle_duration": 36, "utility": "Mississippi County Electric Cooperative", "grid_cap": 45, # Est: 150 * 0.3
+        },
+        "Berkeley": {
+            "location": "Huger, SC", "type": "Sheet/Beam Mill", "eaf_count": 2, "eaf_type": "?",
+            "eaf_manufacturer": "MAN GHH", "eaf_size": 154, "cycles_per_day": 26, "tons_per_year": 2430000,
+            "days_per_year": 300, "cycle_duration": 36, "utility": "Santee Cooper", "grid_cap": 46, # Est: 154 * 0.3
+        },
+        "Texas": {
+            "location": "Jewett, TX", "type": "Bar", "eaf_count": 1, "eaf_type": "AC",
+            "eaf_manufacturer": "SMS Concast", "eaf_size": 100, "cycles_per_day": 33, "tons_per_year": 1000000,
+            "days_per_year": 300, "cycle_duration": 36, "utility": "Oncor Electric Delivery", "grid_cap": 30, # Est: 100 * 0.3
+        },
+        "Kingman": {
+            "location": "Kingman, AZ", "type": "Bar", "eaf_count": 1, "eaf_type": "AC",
+            "eaf_manufacturer": "Danieli", "eaf_size": 100, "cycles_per_day": 21, "tons_per_year": 630000,
+            "days_per_year": 300, "cycle_duration": 36, "utility": "UniSource Energy Services", "grid_cap": 30, # Est: 100 * 0.3
+        },
+        # Lexington data missing utility info in PDFs provided
+        # "Lexington": {
+        #     "location": "Lexington, NC", "type": "Rebar", "eaf_count": 1, "eaf_type": "?",
+        #     "eaf_manufacturer": "?", "eaf_size": 50, "cycles_per_day": 29, "tons_per_year": 430000,
+        #     "days_per_year": 300, "cycle_duration": 36, "utility": "Duke Energy Carolinas (Assumed in PDF)", "grid_cap": 15, # Est: 50 * 0.3
+        # },
+        "Marion": {
+            "location": "Marion, OH", "type": "Bar Mill/Sign Pos", "eaf_count": 1, "eaf_type": "?",
+            "eaf_manufacturer": "?", "eaf_size": 100, "cycles_per_day": 40, "tons_per_year": 1200000,
+            "days_per_year": 300, "cycle_duration": 36, "utility": "AEP Ohio", "grid_cap": 30, # Est: 100 * 0.3
+        },
+        "Nebraska": {
+            "location": "Norfolk, NE", "type": "Bar", "eaf_count": 1, "eaf_type": "?",
+            "eaf_manufacturer": "MAN GHH", "eaf_size": 95, "cycles_per_day": 35, "tons_per_year": 1000000,
+            "days_per_year": 300, "cycle_duration": 36, "utility": "Nebraska Public Power District", "grid_cap": 29, # Est: 95 * 0.3
+        },
+        "Utah": {
+            "location": "Plymouth, UT", "type": "Bar", "eaf_count": 2, "eaf_type": "?",
+            "eaf_manufacturer": "Fuchs", "eaf_size": 51, "cycles_per_day": 42, "tons_per_year": 1290000,
+            "days_per_year": 300, "cycle_duration": 36, "utility": "Rocky Mountain Power", "grid_cap": 15, # Est: 51 * 0.3
+        },
+        "Seattle": {
+            "location": "Seattle, WA", "type": "Bar", "eaf_count": 1, "eaf_type": "?",
+            "eaf_manufacturer": "Fuchs", "eaf_size": 100, "cycles_per_day": 29, "tons_per_year": 855000,
+            "days_per_year": 300, "cycle_duration": 36, "utility": "Seattle City Light", "grid_cap": 30, # Est: 100 * 0.3
+        },
+        "Sedalia": {
+            "location": "Sedalia, MO", "type": "Bar", "eaf_count": 1, "eaf_type": "?",
+            "eaf_manufacturer": "Danieli", "eaf_size": 40, "cycles_per_day": 39, "tons_per_year": 470000,
+            "days_per_year": 300, "cycle_duration": 36, "utility": "Evergy", "grid_cap": 12, # Est: 40 * 0.3
+        },
+        "Tuscaloosa": {
+            "location": "Tuscaloosa, AL", "type": "Plate", "eaf_count": 1, "eaf_type": "AC",
+            "eaf_manufacturer": "MAN GHH", "eaf_size": 122, "cycles_per_day": 17, "tons_per_year": 610000,
+            "days_per_year": 300, "cycle_duration": 36, "utility": "Alabama Power", "grid_cap": 37, # Est: 122 * 0.3
+        },
+        # Connecticut data missing utility confirmation in PDFs
+        # "Connecticut": {
+        #     "location": "Wallingford, CT", "type": "Wire Rod/Rebar", "eaf_count": 1, "eaf_type": "?",
+        #     "eaf_manufacturer": "?", "eaf_size": 30, "cycles_per_day": 27, "tons_per_year": 240000,
+        #     "days_per_year": 300, "cycle_duration": 36, "utility": "Eversource Energy (Assumed)", "grid_cap": 9, # Est: 30 * 0.3
+        # },
+        "Florida": {
+            "location": "Frostproof, FL", "type": "?", "eaf_count": 1, "eaf_type": "AC",
+            "eaf_manufacturer": "Danieli", "eaf_size": 40, "cycles_per_day": 38, "tons_per_year": 450000,
+            "days_per_year": 300, "cycle_duration": 36, "utility": "Duke Energy Florida", "grid_cap": 12, # Est: 40 * 0.3
+        },
+        "Jackson": {
+            "location": "Flowood, MS", "type": "Bar", "eaf_count": 1, "eaf_type": "AC",
+            "eaf_manufacturer": "?", "eaf_size": 50, "cycles_per_day": 33, "tons_per_year": 490000,
+            "days_per_year": 300, "cycle_duration": 36, "utility": "Entergy Mississippi (Assumed)", "grid_cap": 15, # Est: 50 * 0.3
+        },
+        # Memphis data missing utility confirmation in PDFs
+        # "Memphis": {
+        #     "location": "Memphis, TN", "type": "Bar", "eaf_count": 1, "eaf_type": "AC",
+        #     "eaf_manufacturer": "?", "eaf_size": 94, "cycles_per_day": 28, "tons_per_year": 800000,
+        #     "days_per_year": 300, "cycle_duration": 36, "utility": "Memphis Light, Gas and Water (MLGW) (Assumed)", "grid_cap": 28, # Est: 94 * 0.3
+        # },
+        "Nucor-Yamato": { # Using Nucor-Yamato as key
+            "location": "Blytheville, AR", "type": "Structural (implied)", "eaf_count": 2, "eaf_type": "?", # EAF pdf missing details for NYS
+            "eaf_manufacturer": "?", "eaf_size": 150, "cycles_per_day": 25, "tons_per_year": 2500000, # Estimate based on capacity
+            "days_per_year": 300, "cycle_duration": 36, "utility": "Mississippi County Electric Cooperative", "grid_cap": 45, # Est: 150 * 0.3
+        },
+        # --- End Additions ---
     "Custom": {
         "location": "Custom Location",
         "type": "Custom",
@@ -476,6 +566,155 @@ utility_rates = {
         "summer_multiplier": 1.4,
         "shoulder_multiplier": 1.1,
     },
+    # --- Start Additions based on PDF Data ---
+        "Kentucky Utilities": { # For Gallatin
+             # Rate details unavailable/inaccessible in provided PDFs [cite: 78507, 78522]
+             # Using Custom Utility defaults as placeholder
+            **utility_rates["Custom Utility"] # Inherit defaults
+        },
+        "Mississippi County Electric Cooperative": { # For Hickman, Nucor-Yamato
+            "energy_rates": {"off_peak": 32.72, "mid_peak": 32.72, "peak": 32.72}, # Flat rate ($/MWh) [cite: 78532]
+            "demand_charge": 12.28, # Sum of Monthly ($1.55) and Coincident ($10.73) [cite: 78534, 78535] - SIMPLIFICATION
+            "tou_periods": [(0, 24, "off_peak")], # No TOU mentioned for Rate #11 [cite: 78537]
+            "seasonal_rates": False, # No seasonal variation mentioned for base rates
+             # Using default multipliers as placeholder if needed
+            "winter_months": default_utility_params["winter_months"],
+            "summer_months": default_utility_params["summer_months"],
+            "shoulder_months": default_utility_params["shoulder_months"],
+            "winter_multiplier": 1.0, "summer_multiplier": 1.0, "shoulder_multiplier": 1.0,
+        },
+        "Santee Cooper": { # For Berkeley
+            "energy_rates": {"off_peak": 37.50, "mid_peak": 37.50, "peak": 57.50}, # Base rates ($/MWh) [cite: 78442, 78443]
+            "demand_charge": 19.26, # Base demand >300kW [cite: 78447]
+            # Simplified TOU based on energy peak times only
+            "tou_periods": [(0, 13, "off_peak"), (13, 22, "peak"), (22, 24, "off_peak")], # Jun-Aug, M-F peak 1p-10p [cite: 78455]
+            "seasonal_rates": True, # Energy peak is seasonal
+            "winter_months": [1, 2, 3, 4, 5, 9, 10, 11, 12], # All months except Jun, Jul, Aug
+            "summer_months": [6, 7, 8], # Peak energy rate applies
+            "shoulder_months": [], # N/A
+            "winter_multiplier": 1.0, # Base rates apply
+            "summer_multiplier": 1.0, # Base peak rate used directly
+            "shoulder_multiplier": 1.0,
+        },
+        "Oncor Electric Delivery": { # For Texas (Jewett) - TDU ONLY
+            # Represents Delivery charges only. Energy cost depends on separate REP contract. [cite: 78604, 78627]
+            # Using Custom Utility defaults as placeholder for combined rate structure.
+             **utility_rates["Custom Utility"]
+        },
+        "UniSource Energy Services": { # For Kingman
+            # Rates from E-38 LGP [cite: 79202]
+            # Averaging seasonal peak/offpeak for simplicity (Peak ~77.5, Offpeak ~52.5)
+            "energy_rates": {"off_peak": 52.5, "mid_peak": 52.5, "peak": 77.5}, # Approx avg ($/MWh) [cite: 79213, 79214, 79215, 79216]
+            "demand_charge": 16.5, # Approx avg of Summer ($19) / Winter ($14) [cite: 79208]
+            # Based on Energy TOU
+            "tou_periods": [(0, 6, "off_peak"), (6, 10, "peak"), (10, 17, "off_peak"), (17, 21, "peak"), (21, 24, "off_peak")], # Winter Peak 6a-10a, 5p-9p [cite: 79215] -> Rough fit
+            "seasonal_rates": True, # Both energy and demand vary seasonally
+             "winter_months": [11, 12, 1, 2, 3, 4], # Nov-Apr [cite: 79208]
+            "summer_months": [5, 6, 7, 8, 9, 10], # May-Oct [cite: 79208]
+            "shoulder_months": [],
+            "winter_multiplier": 0.85, # Approx ratio of Winter/Summer Demand charge (14/16.5)
+            "summer_multiplier": 1.15, # Approx ratio of Summer/Summer Demand charge (19/16.5)
+            "shoulder_multiplier": 1.0,
+        },
+        # Duke Energy Carolinas assumed for Lexington - Rate data unavailable/inaccessible
+        # "Duke Energy Carolinas": {
+        #      **utility_rates["Custom Utility"] # Placeholder
+        # },
+        "AEP Ohio": { # For Marion - Distribution ONLY
+            # Represents Delivery charges only. Energy cost depends on separate CRES/SSO rates. [cite: 79111, 79274]
+            # Using Custom Utility defaults as placeholder for combined rate structure.
+             **utility_rates["Custom Utility"]
+        },
+        "Nebraska Public Power District": { # For Nebraska (Norfolk)
+            # Rates from LIS [cite: 78556]
+            # Averaging seasonal peak/offpeak for simplicity (Peak ~34.4, Offpeak ~19.3)
+            "energy_rates": {"off_peak": 19.3, "mid_peak": 19.3, "peak": 34.4}, # ($/MWh) [cite: 78558]
+            # Summing demand components (Prod + Trans Line + Trans Sub + Ancillary) - Highly simplified
+            "demand_charge": 19.0, # Approx Avg ((14.46+11.71)/2 + 3.88 + 0.52 + 0.16) [cite: 78560, 78561, 78562, 78563]
+            # TOU defined for energy, using generic split
+            "tou_periods": default_utility_params["tou_periods_filled"],
+            "seasonal_rates": True, # Both energy and demand vary seasonally
+            "winter_months": [10, 11, 12, 1, 2, 3, 4, 5], # Oct-May [cite: 78558]
+            "summer_months": [6, 7, 8, 9], # Jun-Sep [cite: 78558]
+            "shoulder_months": [],
+             # Ratio based on Production Demand
+            "winter_multiplier": 0.9,  # Approx (11.71+3.88+0.52+0.16) / 19.0
+            "summer_multiplier": 1.1, # Approx (14.46+3.88+0.52+0.16) / 19.0
+            "shoulder_multiplier": 1.0,
+        },
+        "Rocky Mountain Power": { # For Utah (Plymouth)
+            # Rates from Schedule 9 [cite: 78583]
+            # Averaging seasonal peak/offpeak (Peak ~48.5, Offpeak ~24.7)
+            "energy_rates": {"off_peak": 24.7, "mid_peak": 24.7, "peak": 48.5}, # ($/MWh) [cite: 78584, 78585]
+            # Summing demand components (Power Charge + Facilities Charge)
+            "demand_charge": 15.79, # Approx Avg ((14.33+12.68)/2 + 2.28) [cite: 78586, 78576]
+            # Using Schedule 9 TOU
+            "tou_periods": [(0, 6, "off_peak"), (6, 9, "peak"), (9, 15, "off_peak"), (15, 22, "peak"), (22, 24, "off_peak")], # Winter peak 6a-9a & 6p-10p; Summer peak 3p-10p - simplified fit [cite: 78588, 78589]
+            "seasonal_rates": True, # Both energy and demand vary seasonally
+            "winter_months": [10, 11, 12, 1, 2, 3, 4, 5], # Oct-May [cite: 78584]
+            "summer_months": [6, 7, 8, 9], # Jun-Sep [cite: 78584]
+            "shoulder_months": [],
+            # Ratio based on Power Charge
+            "winter_multiplier": 0.95, # Approx (12.68+2.28)/15.79
+            "summer_multiplier": 1.05, # Approx (14.33+2.28)/15.79
+            "shoulder_multiplier": 1.0,
+        },
+        "Seattle City Light": { # For Seattle
+            # Rates from High Demand 'C' [cite: 78902]
+            "energy_rates": {"off_peak": 55.30, "mid_peak": 55.30, "peak": 110.70}, # ($/MWh) [cite: 78904]
+            # Using Peak Demand charge primarily (offpeak demand charge is very low)
+            "demand_charge": 5.13, # Peak kW charge [cite: 78905]
+            # TOU: Peak 6am-10pm M-Sat
+            "tou_periods": [(0, 6, "off_peak"), (6, 22, "peak"), (22, 24, "off_peak")], # Simplified M-F fit
+            "seasonal_rates": False, # No seasonal variation mentioned for base rates
+            "winter_months": default_utility_params["winter_months"],
+            "summer_months": default_utility_params["summer_months"],
+            "shoulder_months": default_utility_params["shoulder_months"],
+            "winter_multiplier": 1.0, "summer_multiplier": 1.0, "shoulder_multiplier": 1.0,
+        },
+        "Evergy": { # For Sedalia
+            # Rates from LPS Transmission [cite: 78728]
+            # Using highest tier energy rate for peak, lowest for off-peak (simplification)
+            "energy_rates": {"off_peak": 32.59, "mid_peak": 37.19, "peak": 53.91}, # Summer peak, Winter off-peak ($/MWh) [cite: 78730, 78731]
+            "demand_charge": 9.69, # Avg of Summer ($12.746) / Winter ($6.637) [cite: 78733]
+            "tou_periods": [(0, 24, "off_peak")], # Standard LPS is seasonal, not daily TOU [cite: 78735]
+            "seasonal_rates": True, # Both energy tiers and demand vary seasonally
+            "winter_months": [10, 11, 12, 1, 2, 3, 4, 5], # Oct-May [cite: 78731]
+            "summer_months": [6, 7, 8, 9], # Jun-Sep [cite: 78730]
+            "shoulder_months": [],
+            "winter_multiplier": 0.69, # Ratio Winter/Avg Demand (6.637/9.69)
+            "summer_multiplier": 1.31, # Ratio Summer/Avg Demand (12.746/9.69)
+            "shoulder_multiplier": 1.0,
+        },
+        # Alabama Power already exists (for Birmingham), Tuscaloosa uses the same
+        # Eversource Energy assumed for Connecticut - Rate data unavailable/inaccessible
+        # "Eversource Energy": {
+        #      **utility_rates["Custom Utility"] # Placeholder
+        # },
+        "Duke Energy Florida": { # For Florida (Frostproof)
+             # Rate details unavailable/inaccessible in provided PDFs [cite: 78799, 78801]
+             **utility_rates["Custom Utility"] # Placeholder
+        },
+        "Entergy Mississippi (Assumed)": { # For Jackson
+            # Rates from LGS-TOU [cite: 79177]
+             "energy_rates": {"off_peak": 41.0, "mid_peak": 41.0, "peak": 67.0}, # ($/MWh) [cite: 79287]
+             "demand_charge": 16.75, # Approx Avg Peak ((19.50+14.00)/2) [cite: 79282, 79283]
+             "tou_periods": [(0, 6, "off_peak"), (6, 10, "peak"), (10, 12, "off_peak"), (12, 20, "peak"), (20, 24, "off_peak")], # Winter peak 6a-10a, 6p-10p; Summer peak 12p-8p [cite: 79284, 79285] -> Simplified fit
+             "seasonal_rates": True, # Demand varies seasonally
+             "winter_months": [10, 11, 12, 1, 2, 3, 4, 5], # Oct-May [cite: 79285]
+             "summer_months": [6, 7, 8, 9], # Jun-Sep [cite: 79284]
+             "shoulder_months": [],
+             "winter_multiplier": 0.84, # Ratio Winter Peak/Avg Peak (14.00/16.75)
+             "summer_multiplier": 1.16, # Ratio Summer Peak/Avg Peak (19.50/16.75)
+             "shoulder_multiplier": 1.0,
+        },
+        # Memphis Light, Gas and Water (MLGW) (Assumed) - Rate data unavailable/inaccessible
+        # "Memphis Light, Gas and Water (MLGW) (Assumed)": {
+        #     **utility_rates["Custom Utility"] # Placeholder
+        # },
+        # Meade County RECC rate data from 2014 [cite: 78890], using Brandenburg's current LG&E KU assignment instead.
+
+        # --- End Additions ---
     "Custom Utility": default_utility_params,  # Reference the default dict
 }
 
