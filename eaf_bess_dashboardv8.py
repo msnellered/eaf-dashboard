@@ -783,7 +783,7 @@ app.layout = dbc.Container(fluid=True, className="bg-light min-vh-100 py-4", chi
                                 dbc.CardBody([
                                     # Conditional O&M Input
                                     html.Div(id='bess-opex-inputs-container'),
-                                    create_bess_input_group("Round Trip Efficiency:", "bess-rte", default_bess_params_store['rte_percent'], "%", min_val=1, max_val=100),
+                                    create_bess_input_group("Round Trip Efficiency:", "bess-rte", default_bess_params_store['rte_percent'], "%", min_val=1),
                                     create_bess_input_group("Insurance Rate:", "bess-insurance", default_bess_params_store['insurance_percent_yr'], "%/yr", step=0.01),
                                 ])
                             ], className="mb-3"),
@@ -800,7 +800,7 @@ app.layout = dbc.Container(fluid=True, className="bg-light min-vh-100 py-4", chi
                                 dbc.CardHeader("Performance"),
                                 dbc.CardBody([
                                     create_bess_input_group("Cycle Life:", "bess-cycle-life", default_bess_params_store['cycle_life'], "cycles", min_val=100),
-                                    create_bess_input_group("Depth of Discharge:", "bess-dod", default_bess_params_store['dod_percent'], "%", min_val=1, max_val=100),
+                                    create_bess_input_group("Depth of Discharge:", "bess-dod", default_bess_params_store['dod_percent'], "%", min_val=1,),
                                     create_bess_input_group("Calendar Life:", "bess-calendar-life", default_bess_params_store['calendar_life'], "years", min_val=1),
                                 ])
                             ]),
