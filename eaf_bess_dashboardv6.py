@@ -570,7 +570,7 @@ utility_rates = {
         "Kentucky Utilities": { # For Gallatin
              # Rate details unavailable/inaccessible in provided PDFs [cite: 78507, 78522]
              # Using Custom Utility defaults as placeholder
-            **utility_rates["Custom Utility"] # Inherit defaults
+         
         },
         "Mississippi County Electric Cooperative": { # For Hickman, Nucor-Yamato
             "energy_rates": {"off_peak": 32.72, "mid_peak": 32.72, "peak": 32.72}, # Flat rate ($/MWh) [cite: 78532]
@@ -693,7 +693,7 @@ utility_rates = {
         # },
         "Duke Energy Florida": { # For Florida (Frostproof)
              # Rate details unavailable/inaccessible in provided PDFs [cite: 78799, 78801]
-             **utility_rates["Custom Utility"] # Placeholder
+            
         },
         "Entergy Mississippi (Assumed)": { # For Jackson
             # Rates from LGS-TOU [cite: 79177]
