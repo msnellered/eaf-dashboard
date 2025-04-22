@@ -2469,48 +2469,84 @@ def navigate_tabs(n_params, n_incentives):
 # Callback to update EAF params store based on inputs
 @app.callback(
     Output("eaf-params-store", "data"),
-    [
-        Input("eaf-size", "value"),
-        Input("eaf-count", "value"),
-        Input("grid-cap", "value"),
-        Input("cycles-per-day", "value"),
-        Input("cycle-duration", "value"),
-        Input("days-per-year", "value"),
-        Input("mill-selection-dropdown", "value"),
-    ],  # Trigger on mill change too
-    State("eaf-params-store", "data"),  # Keep existing data if only mill changes
+    [Input("eaf-size", "value"),
+     Input("eaf-count", "value"),
+     Input("grid-cap", "value"),
+     Input("cycles-per-day", "value"),
+     Input("cycle-duration", "value"), # Input component value
+     Input("days-per-year", "value"),
+     Input("mill-selection-dropdown", "value")],
+    State("eaf-params-store", "data") # Get previous state
 )
-def update_eaf_params_store(
-    size, count, grid_cap, cycles, duration, days, selected_mill, existing_data
-):
+def update_eaf_params_store(size, count, grid_cap, cycles, duration, days, selected_mill, existing_data):
     ctx = callback_context
-    trigger_id = ctx.triggered_id
+    triggered_id = ctx.triggered_id if ctx.triggered_id else 'unknown'
 
-    if trigger_id == "mill-selection-dropdown":
-        # If mill changed, load data for that mill
-        if selected_mill and selected_mill in nucor_mills:
-            return nucor_mills[selected_mill]
-        else:  # Default to custom if selection invalid or "Custom"
-            return nucor_mills["Custom"]
+    # Start with the previous state or default Custom data if no valid existing state
+    output_data = {}
+    if existing_data and isinstance(existing_data, dict):
+        output_data = existing_data.copy()
     else:
-        # If a specific input changed, update the store
-        # Use existing_data as base to handle partial updates if needed
-        updated_data = (
-            existing_data.copy() if existing_data else nucor_mills["Custom"].copy()
-        )
-        updated_data.update(
-            {
-                "eaf_size": size,
-                "eaf_count": count,
-                "grid_cap": grid_cap,
-                "cycles_per_day": cycles,
-                "cycle_duration": duration,  # Store the average/base duration
-                "cycle_duration_input": duration,  # Store the user input specifically
-                "days_per_year": days,
-                # Keep other mill-specific data like location, type if loaded previously
-            }
-        )
-        return updated_data
+        output_data = nucor_mills["Custom"].copy()
+        # Ensure cycle_duration_input exists in Custom default
+        if "cycle_duration_input" not in output_data:
+             output_data["cycle_duration_input"] = output_data.get("cycle_duration", 0)
+
+    if triggered_id == "mill-selection-dropdown":
+        # --- Triggered by Dropdown ---
+        # Load data fully from the selected mill's definition
+        if selected_mill and selected_mill in nucor_mills:
+            output_data = nucor_mills[selected_mill].copy()
+        else: # Load Custom defaults if dropdown selection is invalid or "Custom"
+            output_data = nucor_mills["Custom"].copy()
+        # *** Always ensure cycle_duration_input is set after loading from mill data ***
+        output_data["cycle_duration_input"] = output_data.get("cycle_duration", 0)
+
+    else:
+        # --- Triggered by Individual Input Change ---
+        # Apply updates one by one only if the value is not None
+        # This prevents None values during transitions from overwriting good data
+        if size is not None: output_data["eaf_size"] = size
+        if count is not None: output_data["eaf_count"] = count
+        if grid_cap is not None: output_data["grid_cap"] = grid_cap
+        if cycles is not None: output_data["cycles_per_day"] = cycles
+        if duration is not None:
+            output_data["cycle_duration"] = duration
+            # Always update cycle_duration_input if cycle_duration changes from a valid input
+            output_data["cycle_duration_input"] = duration
+        if days is not None: output_data["days_per_year"] = days
+
+    # *** Final Validation/Cleanup before returning ***
+    # Ensure 'cycle_duration' and 'cycle_duration_input' keys exist and are numeric >= 0
+
+    base_duration = output_data.get("cycle_duration")
+    input_duration = output_data.get("cycle_duration_input")
+
+    # Convert to numeric, default to 0 if invalid/None
+    try: base_duration = float(base_duration) if base_duration is not None else 0.0
+    except (ValueError, TypeError): base_duration = 0.0
+    try: input_duration = float(input_duration) if input_duration is not None else 0.0
+    except (ValueError, TypeError): input_duration = 0.0
+
+    # Ensure non-negative
+    base_duration = max(0.0, base_duration)
+    input_duration = max(0.0, input_duration)
+
+    # If input_duration became invalid (0), but base_duration is valid (>0), reset input
+    if input_duration <= 0 and base_duration > 0:
+        output_data["cycle_duration_input"] = base_duration
+    elif input_duration > 0: # If input duration is valid, ensure base duration matches
+         output_data["cycle_duration"] = input_duration
+    else: # If both seem invalid, set both to 0
+         output_data["cycle_duration"] = 0.0
+         output_data["cycle_duration_input"] = 0.0
+
+    # Update the dictionary with cleaned values
+    output_data["cycle_duration"] = base_duration
+    output_data["cycle_duration_input"] = input_duration
+
+
+    return output_data
 
 
 # Callback to update BESS params store
