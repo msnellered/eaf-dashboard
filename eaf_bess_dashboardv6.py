@@ -1026,26 +1026,37 @@ def calculate_financial_metrics(
         # O&M costs adjusted for inflation
         inflated_om_costs = initial_om_cost * ((1 + inflation_rate) ** (year - 1))
 
-        # Check for battery replacement
+        # --- Corrected Battery Replacement Logic ---
         replacement_cost_year = 0
-        if (
-            replacement_year == -1 and year > battery_life_years
-        ):  # Replace only once when life exceeded
-            # Inflate the *original* BESS cost to the replacement year
+        # Check if a replacement cycle is completed *before or during* this year
+        # If battery_life_years is > 0, check if the current year exceeds the threshold
+        # of the last replacement + battery_life_years
+        # We need to track how many full battery lives have passed.
+
+        # Calculate how many replacements *should have happened* by the START of the current year
+        replacements_due_by_last_year = 0
+        if battery_life_years > 0:
+             replacements_due_by_last_year = np.floor((year - 1) / battery_life_years)
+
+        # Calculate how many replacements *should have happened* by the END of the current year
+        replacements_due_by_this_year = 0
+        if battery_life_years > 0:
+             replacements_due_by_this_year = np.floor(year / battery_life_years)
+
+        # If the number of replacements due increases during this year, a replacement cost occurs
+        if replacements_due_by_this_year > replacements_due_by_last_year:
+            # Calculate inflated replacement cost occurring in this year
+            # Assumes replacement happens at the beginning of the year after life is exceeded
             inflated_replacement_cost = bess_cost * ((1 + inflation_rate) ** (year - 1))
 
-            # Assume incentives might apply partially to replacement (highly dependent on rules)
-            # This is a simplification; real analysis needs specific incentive rules for replacement.
-            replacement_incentive_fraction = (
-                0.0  # Default to 0% incentive on replacement
-            )
-            replacement_incentives = (
-                incentives.get("total_incentive", 0) * replacement_incentive_fraction
-            )
+            # Apply incentives? (Using 0% for now, adjust if needed)
+            replacement_incentive_fraction = 0.0
+            replacement_incentives = incentives.get("total_incentive", 0) * replacement_incentive_fraction
             net_replacement_cost = inflated_replacement_cost - replacement_incentives
 
             replacement_cost_year = net_replacement_cost
-            replacement_year = year  # Record the year of replacement
+            print(f"DEBUG: Battery replacement cost ${replacement_cost_year:,.0f} applied in year {year}") # Optional debug print
+        # --- End of Corrected Replacement Logic ---
 
         # Calculate Salvage Value in the final year
         salvage_value_year = 0
@@ -1054,20 +1065,19 @@ def calculate_financial_metrics(
             inflated_original_cost = bess_cost * ((1 + inflation_rate) ** (year - 1))
             base_salvage = inflated_original_cost * salvage_value_fraction
 
-            # Adjust salvage based on remaining life
-            if replacement_year != -1:  # Was replaced
-                years_since_replacement = project_years - replacement_year
-                remaining_life_fraction = (
-                    max(0, 1 - (years_since_replacement / battery_life_years))
-                    if battery_life_years > 0
-                    else 0
-                )
-            else:  # Original battery
-                remaining_life_fraction = (
-                    max(0, 1 - (project_years / battery_life_years))
-                    if battery_life_years > 0
-                    else 0
-                )
+             # Calculate age of the battery operating in the final year
+            age_of_final_battery = project_years # Default if never replaced
+            if battery_life_years > 0:
+                 # Find the start year of the last battery installed
+                 num_prior_replacements = np.floor(project_years / battery_life_years)
+                 last_replacement_start_year = num_prior_replacements * battery_life_years
+                 # Age is time elapsed since it was installed (relative to project start = 0)
+                 age_of_final_battery = project_years - last_replacement_start_year
+
+            # Calculate remaining life fraction
+            remaining_life_fraction = 0.0
+            if battery_life_years > 0:
+                 remaining_life_fraction = max(0, 1 - (age_of_final_battery / battery_life_years))
 
             salvage_value_year = base_salvage * remaining_life_fraction
 
