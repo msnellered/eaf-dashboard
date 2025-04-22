@@ -1778,10 +1778,10 @@ app.layout = html.Div(
                                                                         dcc.Input(
                                                                             id="wacc",
                                                                             type="number",
-                                                                            value=default_financial_params[
+                                                                            value=round(default_financial_params[
                                                                                 "wacc"
                                                                             ]
-                                                                            * 100,
+                                                                            * 100, 1),
                                                                             min=0,
                                                                             max=100,
                                                                             className="form-control",
