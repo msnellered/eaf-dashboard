@@ -702,7 +702,7 @@ app.layout = dbc.Container(fluid=True, className="bg-light min-vh-100 py-4", chi
     dbc.Tabs(id="main-tabs", active_tab="tab-mill", children=[
         # Mill Selection Tab (keep as is)
         dbc.Tab(label="1. Mill Selection", tab_id="tab-mill", children=[
-             dbc.Container(className="py-4", children=[
+             dbc.Container(children=[
                 html.H3("Select Nucor Mill", className="mb-3"),
                 html.P("Choose a mill to pre-fill parameters, or select 'Custom' to enter values manually.", className="text-muted mb-4"),
                 html.Div([
