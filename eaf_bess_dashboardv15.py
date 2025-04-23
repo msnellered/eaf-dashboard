@@ -1563,6 +1563,7 @@ def update_bess_params_store(capacity, power, technology, sb_bos_cost, pcs_cost,
     # manager=background_callback_manager, # If using background callbacks
 )
 def display_advanced_calculation_results(n_clicks, eaf_params, bess_params, utility_params, financial_params, incentive_params, validation_errors):
+    print(f"DEBUG: BESS params received for calculation: {bess_params}")
     """Triggers ADVANCED calculations and displays results."""
     results_output = html.Div("Click 'Calculate Results' to generate the analysis.", className="text-center text-muted")
     stored_data = {}; error_output = ""; error_open = False
