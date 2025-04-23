@@ -539,13 +539,26 @@ def calculate_financial_metrics(
 
         # Recurring Replacement Cost Logic
         replacement_cost_year = 0
-        # Check if a replacement is due *at the beginning* of this year
-        if battery_replacement_interval != float('inf') and year > 1 and np.isclose((year - 1) % battery_replacement_interval, 0):
-             # Replacement cost is the *original* total cost, inflated to the replacement year
-             # Assume no incentives on replacements
-             inflated_replacement_cost = total_initial_cost * ((1 + inflation_rate) ** (year - 1))
-             replacement_cost_year = inflated_replacement_cost
-             # print(f"DEBUG: Battery replacement cost ${replacement_cost_year:,.0f} applied in year {year}")
+        if battery_replacement_interval != float('inf') and battery_replacement_interval > 0:
+            # For very short life batteries (< 1 year), we need multiple replacements per year
+            if battery_replacement_interval < 1:
+                # How many replacements needed per year (e.g., 0.5 years = 2 replacements per year)
+                replacements_per_year = int(1 / battery_replacement_interval)
+                # Apply replacement costs every year after year 0
+                if year >= 1:
+                    # Calculate replacement cost with inflation
+                    inflated_replacement_cost = total_initial_cost * ((1 + inflation_rate) ** (year - 1))
+                    replacement_cost_year = inflated_replacement_cost * replacements_per_year
+                    print(f"DEBUG: {replacements_per_year} battery replacements costing ${replacement_cost_year:,.0f} applied in year {year}")
+            else:
+                # For longer life batteries, check if we're at a replacement year
+                # Add a small tolerance to handle floating point comparisons
+                if year > 1 and abs((year - 1) % battery_replacement_interval) < 0.01:
+                    # Replacement cost is the *original* total cost, inflated to the replacement year
+                    # Assume no incentives on replacements
+                    inflated_replacement_cost = total_initial_cost * ((1 + inflation_rate) ** (year - 1))
+                    replacement_cost_year = inflated_replacement_cost
+                    print(f"DEBUG: Battery replacement cost ${replacement_cost_year:,.0f} applied in year {year}")
 
         # EBT (Earnings Before Tax) - Simplified (no depreciation modeled here)
         ebt = savings_t - o_m_cost_t - replacement_cost_year
