@@ -1147,39 +1147,77 @@ def update_incentive_params_store(itc_en, itc_pct, ceic_en, ceic_pct, bonus_en, 
         "custom_incentive_type": custom_type, "custom_incentive_amount": custom_amt, "custom_incentive_description": custom_desc,
     }
 
-# Utility Store Update
+# Utility Store Update (REVISED TO HANDLE TOGGLE STATE)
 @app.callback(
     Output(STORE_UTILITY, "data"),
-    [Input(ID_UTILITY_DROPDOWN, "value"), Input(ID_OFF_PEAK, "value"), Input(ID_MID_PEAK, "value"), Input(ID_PEAK, "value"), Input(ID_DEMAND_CHARGE, "value"), Input(ID_SEASONAL_TOGGLE, "value"), Input("winter-multiplier", "value"), Input("summer-multiplier", "value"), Input("shoulder-multiplier", "value"), Input("winter-months", "value"), Input("summer-months", "value"), Input("shoulder-months", "value"), Input({"type": "tou-start", "index": ALL}, "value"), Input({"type": "tou-end", "index": ALL}, "value"), Input({"type": "tou-rate", "index": ALL}, "value")],
+    [Input(ID_UTILITY_DROPDOWN, "value"),
+     Input(ID_OFF_PEAK, "value"),
+     Input(ID_MID_PEAK, "value"),
+     Input(ID_PEAK, "value"),
+     Input(ID_DEMAND_CHARGE, "value"),
+     Input(ID_SEASONAL_TOGGLE, "value"), # Input for toggle status
+     Input("winter-multiplier", "value"), # Keep as Input
+     Input("summer-multiplier", "value"), # Keep as Input
+     Input("shoulder-multiplier", "value"),# Keep as Input
+     Input("winter-months", "value"),     # Keep as Input
+     Input("summer-months", "value"),     # Keep as Input
+     Input("shoulder-months", "value"),   # Keep as Input
+     Input({"type": "tou-start", "index": ALL}, "value"),
+     Input({"type": "tou-end", "index": ALL}, "value"),
+     Input({"type": "tou-rate", "index": ALL}, "value")],
     State(STORE_UTILITY, "data"),
 )
-def update_utility_params_store(utility_provider, off_peak_rate, mid_peak_rate, peak_rate, demand_charge, seasonal_toggle, winter_mult, summer_mult, shoulder_mult, winter_months_str, summer_months_str, shoulder_months_str, tou_starts, tou_ends, tou_rates, existing_data):
+def update_utility_params_store(
+    utility_provider, off_peak_rate, mid_peak_rate, peak_rate, demand_charge,
+    seasonal_toggle_value, # Get the toggle value from its Input
+    winter_mult, summer_mult, shoulder_mult, # Values from inputs
+    winter_months_str, summer_months_str, shoulder_months_str, # Values from inputs
+    tou_starts, tou_ends, tou_rates,
+    existing_data
+):
+    """
+    Updates the utility parameter store.
+    Checks the seasonal toggle state before applying seasonal input values.
+    """
     ctx = callback_context; triggered_id = ctx.triggered_id
     params = {}
+    # Use pprint for cleaner dictionary printing in logs
+    import pprint
 
     # Determine base parameters (from dropdown selection or existing state)
     if isinstance(triggered_id, str) and triggered_id == ID_UTILITY_DROPDOWN:
+        print(f"DEBUG Utility Store: Triggered by Dropdown ({utility_provider})")
         params = utility_rates.get(utility_provider, default_utility_params).copy()
         # Ensure raw TOU periods are copied from the source 'tou_periods' key if it exists
         params[KEY_TOU_RAW] = params.get("tou_periods", default_utility_params[KEY_TOU_RAW])
     elif existing_data:
+        # print(f"DEBUG Utility Store: Triggered by other input ({triggered_id}). Using existing data.")
         params = existing_data.copy()
     else:
+        print("DEBUG Utility Store: No existing data. Using default params.")
         params = default_utility_params.copy()
 
-    # Update basic rates and charges
+    # Update basic rates and charges (always happens)
     params[KEY_ENERGY_RATES] = {"off_peak": off_peak_rate, "mid_peak": mid_peak_rate, "peak": peak_rate}
     params[KEY_DEMAND_CHARGE] = demand_charge
 
-    # Update seasonal settings
-    params[KEY_SEASONAL] = True if seasonal_toggle and "enabled" in seasonal_toggle else False
+    # --- Revised Seasonal Logic ---
+    # Determine if seasonal is conceptually enabled based on toggle INPUT value
+    is_seasonal_enabled = seasonal_toggle_value and "enabled" in seasonal_toggle_value
+    params[KEY_SEASONAL] = is_seasonal_enabled # Store the boolean flag
+
     def parse_months(month_str, default_list):
         if not isinstance(month_str, str): return default_list
-        try: parsed = [int(m.strip()) for m in month_str.split(",") if m.strip() and 1 <= int(m.strip()) <= 12]; return parsed if parsed else default_list
-        except ValueError: return default_list # Return default if parsing fails
+        try:
+            parsed = [int(m.strip()) for m in month_str.split(",") if m.strip() and 1 <= int(m.strip()) <= 12]
+            return parsed if parsed else default_list
+        except ValueError:
+            print(f"Warning: Could not parse month string '{month_str}'. Using default.")
+            return default_list
 
-    # Only update seasonal details if enabled OR if one of the seasonal inputs triggered the callback
-    if params[KEY_SEASONAL] or any(trig["prop_id"].startswith(p) for trig in ctx.triggered for p in ["winter-", "summer-", "shoulder-"]):
+    # Update seasonal details ONLY IF the toggle is enabled
+    if is_seasonal_enabled:
+        print("DEBUG Utility Store: Seasonal Toggle is ON. Updating seasonal params from inputs.")
         params[KEY_WINTER_MONTHS] = parse_months(winter_months_str, default_utility_params[KEY_WINTER_MONTHS])
         params[KEY_SUMMER_MONTHS] = parse_months(summer_months_str, default_utility_params[KEY_SUMMER_MONTHS])
         params[KEY_SHOULDER_MONTHS] = parse_months(shoulder_months_str, default_utility_params[KEY_SHOULDER_MONTHS])
@@ -1187,7 +1225,17 @@ def update_utility_params_store(utility_provider, off_peak_rate, mid_peak_rate, 
         params[KEY_SUMMER_MULT] = summer_mult if summer_mult is not None else default_utility_params[KEY_SUMMER_MULT]
         params[KEY_SHOULDER_MULT] = shoulder_mult if shoulder_mult is not None else default_utility_params[KEY_SHOULDER_MULT]
         # TODO: Add validation here to ensure all 12 months are covered and unique
+    else:
+        print("DEBUG Utility Store: Seasonal Toggle is OFF. Using default/existing seasonal params (resetting to defaults).")
+        # Reset to defaults when toggle is off to avoid confusion
+        params[KEY_WINTER_MONTHS] = default_utility_params[KEY_WINTER_MONTHS]
+        params[KEY_SUMMER_MONTHS] = default_utility_params[KEY_SUMMER_MONTHS]
+        params[KEY_SHOULDER_MONTHS] = default_utility_params[KEY_SHOULDER_MONTHS]
+        params[KEY_WINTER_MULT] = default_utility_params[KEY_WINTER_MULT]
+        params[KEY_SUMMER_MULT] = default_utility_params[KEY_SUMMER_MULT]
+        params[KEY_SHOULDER_MULT] = default_utility_params[KEY_SHOULDER_MULT]
 
+    # --- TOU Logic (remains the same) ---
     # Update TOU periods based on UI inputs unless triggered by provider dropdown
     if isinstance(triggered_id, str) and triggered_id == ID_UTILITY_DROPDOWN:
         # Use the raw periods already set from the selected utility data
@@ -1213,6 +1261,8 @@ def update_utility_params_store(utility_provider, off_peak_rate, mid_peak_rate, 
     # Always fill gaps for calculation purposes
     params[KEY_TOU_FILLED] = fill_tou_gaps(params.get(KEY_TOU_RAW, []))
 
+    print("DEBUG: Updated Utility Store:")
+    pprint.pprint(params)
     return params
 
 # Mill Info Card Update
@@ -1298,18 +1348,23 @@ def update_rates_from_provider_manual(selected_utility): # Removed selected_mill
 
     return off_peak, mid_peak, peak, demand, seasonal_enabled, tou_elements_ui
 
-# Seasonal Rates UI Toggle
+# Seasonal Rates UI Toggle (REVISED TO ALWAYS RENDER INPUTS)
 @app.callback(
     [Output(ID_SEASONAL_CONTAINER, "children"), Output(ID_SEASONAL_CONTAINER, "style")],
     [Input(ID_SEASONAL_TOGGLE, "value"), Input(ID_UTILITY_DROPDOWN, "value")],
-    # State(ID_MILL_DROPDOWN, "value"), # Mill state not needed if we prioritize utility dropdown
+    # No State needed here for this fix, defaults loaded from dropdown trigger
 )
-def update_seasonal_rates_ui(toggle_value, selected_utility): # Removed selected_mill state
+def update_seasonal_rates_ui(toggle_value, selected_utility):
+    """
+    Updates the seasonal rates UI.
+    ALWAYS renders the input elements within the children.
+    Controls the visibility of the container div (ID_SEASONAL_CONTAINER) via style.
+    """
     is_enabled = toggle_value and "enabled" in toggle_value
-    if not is_enabled:
-        return [], {"display": "none"}
+    # Set the display style for the CONTAINER based on the toggle
+    display_style = {"display": "block", "border": "1px solid #ccc", "padding": "10px", "border-radius": "5px", "background-color": "#f9f9f9"} if is_enabled else {"display": "none"}
 
-    # Get defaults from the selected utility provider
+    # Get defaults from the selected utility provider to populate values
     utility_data_source = utility_rates.get(selected_utility, default_utility_params)
 
     winter_mult = utility_data_source.get(KEY_WINTER_MULT, default_utility_params[KEY_WINTER_MULT])
@@ -1319,8 +1374,9 @@ def update_seasonal_rates_ui(toggle_value, selected_utility): # Removed selected
     summer_m = ",".join(map(str, utility_data_source.get(KEY_SUMMER_MONTHS, default_utility_params[KEY_SUMMER_MONTHS])))
     shoulder_m = ",".join(map(str, utility_data_source.get(KEY_SHOULDER_MONTHS, default_utility_params[KEY_SHOULDER_MONTHS])))
 
-    # Define the UI elements for seasonal inputs
+    # Define the UI elements for seasonal inputs - ALWAYS create them
     seasonal_ui = html.Div([
+        # Make sure IDs match exactly what update_utility_params_store expects
         dbc.Row([
             dbc.Col([dbc.Label("Winter Multiplier:", size="sm"), dcc.Input(id="winter-multiplier", type="number", value=winter_mult, min=0, step=0.01, className="form-control form-control-sm")], md=4, className="mb-2"),
             dbc.Col([dbc.Label("Summer Multiplier:", size="sm"), dcc.Input(id="summer-multiplier", type="number", value=summer_mult, min=0, step=0.01, className="form-control form-control-sm")], md=4, className="mb-2"),
@@ -1333,7 +1389,10 @@ def update_seasonal_rates_ui(toggle_value, selected_utility): # Removed selected
         ], className="row"),
         html.P("Use comma-separated month numbers (1-12). Ensure all 12 months are assigned.", className="small text-muted mt-1"),
     ])
-    return seasonal_ui, {"display": "block"}
+
+    # Return the UI elements AND the style to show/hide the container
+    # The inputs now always exist in the layout's children structure.
+    return seasonal_ui, display_style
 
 # TOU UI Management Helper
 def generate_tou_ui_elements(tou_periods_list):
