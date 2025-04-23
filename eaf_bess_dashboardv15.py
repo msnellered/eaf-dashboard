@@ -969,8 +969,7 @@ def optimize_battery_size_advanced(eaf_params, utility_params, financial_params,
         for power in power_options:
             count += 1
             print(f"  Testing {count}/{total_combinations}: Cap={capacity:.1f} MWh, Pow={power:.1f} MW")
-            c_rate = power / capacity if capacity > 0 else float('inf')
-            if not (0.2 <= c_rate <= 2.5): continue # Skip invalid C-rates
+            # No C-rate validation
 
             test_bess_params = bess_base_params.copy()
             test_bess_params[KEY_CAPACITY] = capacity
