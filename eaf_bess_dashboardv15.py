@@ -1521,34 +1521,53 @@ def update_bess_inputs_from_technology(selected_technology):
     return ( tech_data.get(KEY_EXAMPLE_PRODUCT, "N/A"), tech_data.get(KEY_SB_BOS_COST, 0), tech_data.get(KEY_PCS_COST, 0), tech_data.get(KEY_EPC_COST, 0), tech_data.get(KEY_SYS_INT_COST, 0), opex_container_children, tech_data.get(KEY_RTE, 0), tech_data.get(KEY_INSURANCE, 0), tech_data.get(KEY_DISCONNECT_COST, 0), tech_data.get(KEY_RECYCLING_COST, 0), tech_data.get(KEY_CYCLE_LIFE, 0), tech_data.get(KEY_DOD, 0), tech_data.get(KEY_CALENDAR_LIFE, 0), )
 
 # BESS Store Update (V7 Logic - State-based Update)
-# ... (remains the same) ...
-@app.callback( Output(STORE_BESS, "data"), [Input(ID_BESS_CAPACITY, "value"), Input(ID_BESS_POWER, "value"), Input(ID_BESS_TECH_DROPDOWN, "value"), Input(ID_BESS_SB_BOS_COST, "value"), Input(ID_BESS_PCS_COST, "value"), Input(ID_BESS_EPC_COST, "value"), Input(ID_BESS_SYS_INT_COST, "value"), Input(ID_BESS_FIXED_OM, "value"), Input(ID_BESS_OM_KWHR_YR, "value"), Input(ID_BESS_RTE, "value"), Input(ID_BESS_INSURANCE, "value"), Input(ID_BESS_DISCONNECT_COST, "value"), Input(ID_BESS_RECYCLING_COST, "value"), Input(ID_BESS_CYCLE_LIFE, "value"), Input(ID_BESS_DOD, "value"), Input(ID_BESS_CALENDAR_LIFE, "value")], State(STORE_BESS, "data"), prevent_initial_call=True,)
-def update_bess_params_store(capacity, power, technology, sb_bos_cost, pcs_cost, epc_cost, sys_int_cost, fixed_om, om_kwhyr, rte, insurance, disconnect_cost, recycling_cost, cycle_life, dod, calendar_life, existing_data):
-    if not ctx.triggered_id: return dash.no_update
-    triggered_prop_id = ctx.triggered[0]["prop_id"]; triggered_id_base = triggered_prop_id.split(".")[0]
-    if '{' in triggered_id_base: triggered_id_base = json.loads(triggered_id_base)['type']
+@app.callback(
+    Output(STORE_BESS, "data"),
+    [Input(ID_BESS_CAPACITY, "value"), Input(ID_BESS_POWER, "value"), 
+     Input(ID_BESS_TECH_DROPDOWN, "value"), Input(ID_BESS_SB_BOS_COST, "value"), 
+     Input(ID_BESS_PCS_COST, "value"), Input(ID_BESS_EPC_COST, "value"), 
+     Input(ID_BESS_SYS_INT_COST, "value"), Input(ID_BESS_FIXED_OM, "value"), 
+     Input(ID_BESS_OM_KWHR_YR, "value"), Input(ID_BESS_RTE, "value"), 
+     Input(ID_BESS_INSURANCE, "value"), Input(ID_BESS_DISCONNECT_COST, "value"), 
+     Input(ID_BESS_RECYCLING_COST, "value"), Input(ID_BESS_CYCLE_LIFE, "value"), 
+     Input(ID_BESS_DOD, "value"), Input(ID_BESS_CALENDAR_LIFE, "value")],
+    State(STORE_BESS, "data"),
+    prevent_initial_call=True,
+)
+def update_bess_params_store(capacity, power, technology, sb_bos_cost, pcs_cost, 
+                             epc_cost, sys_int_cost, fixed_om, om_kwhyr, rte, 
+                             insurance, disconnect_cost, recycling_cost, cycle_life, 
+                             dod, calendar_life, existing_data):
+    # Force a complete store update instead of just updating triggered property
     store_data = existing_data.copy() if existing_data and isinstance(existing_data, dict) else default_bess_params_store.copy()
-    if triggered_id_base == ID_BESS_TECH_DROPDOWN:
-        selected_technology = technology; tech_defaults = bess_technology_data.get(selected_technology, bess_technology_data["LFP"]).copy()
-        store_data.update(tech_defaults); store_data[KEY_TECH] = selected_technology; store_data[KEY_CAPACITY] = capacity; store_data[KEY_POWER_MAX] = power
-    elif triggered_id_base == ID_BESS_CAPACITY: store_data[KEY_CAPACITY] = capacity
-    elif triggered_id_base == ID_BESS_POWER: store_data[KEY_POWER_MAX] = power
-    elif triggered_id_base == ID_BESS_SB_BOS_COST: store_data[KEY_SB_BOS_COST] = sb_bos_cost
-    elif triggered_id_base == ID_BESS_PCS_COST: store_data[KEY_PCS_COST] = pcs_cost
-    elif triggered_id_base == ID_BESS_EPC_COST: store_data[KEY_EPC_COST] = epc_cost
-    elif triggered_id_base == ID_BESS_SYS_INT_COST: store_data[KEY_SYS_INT_COST] = sys_int_cost
-    elif triggered_id_base == ID_BESS_RTE: store_data[KEY_RTE] = rte
-    elif triggered_id_base == ID_BESS_INSURANCE: store_data[KEY_INSURANCE] = insurance
-    elif triggered_id_base == ID_BESS_DISCONNECT_COST: store_data[KEY_DISCONNECT_COST] = disconnect_cost
-    elif triggered_id_base == ID_BESS_RECYCLING_COST: store_data[KEY_RECYCLING_COST] = recycling_cost
-    elif triggered_id_base == ID_BESS_CYCLE_LIFE: store_data[KEY_CYCLE_LIFE] = cycle_life
-    elif triggered_id_base == ID_BESS_DOD: store_data[KEY_DOD] = dod
-    elif triggered_id_base == ID_BESS_CALENDAR_LIFE: store_data[KEY_CALENDAR_LIFE] = calendar_life
-    current_tech_in_store = store_data.get(KEY_TECH, "LFP"); intended_om_is_kwhyr = KEY_OM_KWHR_YR in bess_technology_data.get(current_tech_in_store, {})
-    if triggered_id_base == ID_BESS_FIXED_OM:
+    
+    # Always update critical parameters regardless of what triggered the callback
+    store_data[KEY_CAPACITY] = capacity
+    store_data[KEY_POWER_MAX] = power
+    store_data[KEY_TECH] = technology
+    
+    # Update other parameters based on what triggered the callback
+    triggered_id = ctx.triggered_id
+    if triggered_id == ID_BESS_SB_BOS_COST: store_data[KEY_SB_BOS_COST] = sb_bos_cost
+    elif triggered_id == ID_BESS_PCS_COST: store_data[KEY_PCS_COST] = pcs_cost
+    elif triggered_id == ID_BESS_EPC_COST: store_data[KEY_EPC_COST] = epc_cost
+    elif triggered_id == ID_BESS_SYS_INT_COST: store_data[KEY_SYS_INT_COST] = sys_int_cost
+    elif triggered_id == ID_BESS_RTE: store_data[KEY_RTE] = rte
+    elif triggered_id == ID_BESS_INSURANCE: store_data[KEY_INSURANCE] = insurance
+    elif triggered_id == ID_BESS_DISCONNECT_COST: store_data[KEY_DISCONNECT_COST] = disconnect_cost
+    elif triggered_id == ID_BESS_RECYCLING_COST: store_data[KEY_RECYCLING_COST] = recycling_cost
+    elif triggered_id == ID_BESS_CYCLE_LIFE: store_data[KEY_CYCLE_LIFE] = cycle_life
+    elif triggered_id == ID_BESS_DOD: store_data[KEY_DOD] = dod
+    elif triggered_id == ID_BESS_CALENDAR_LIFE: store_data[KEY_CALENDAR_LIFE] = calendar_life
+    
+    # Handle O&M properly
+    current_tech_in_store = store_data.get(KEY_TECH, "LFP")
+    intended_om_is_kwhyr = KEY_OM_KWHR_YR in bess_technology_data.get(current_tech_in_store, {})
+    if triggered_id == ID_BESS_FIXED_OM:
         if not intended_om_is_kwhyr: store_data[KEY_FIXED_OM] = fixed_om; store_data.pop(KEY_OM_KWHR_YR, None)
-    elif triggered_id_base == ID_BESS_OM_KWHR_YR:
+    elif triggered_id == ID_BESS_OM_KWHR_YR:
         if intended_om_is_kwhyr: store_data[KEY_OM_KWHR_YR] = om_kwhyr; store_data.pop(KEY_FIXED_OM, None)
+    
     return store_data
 
 # --- Main Calculation Callback (Uses Advanced Metrics) ---
