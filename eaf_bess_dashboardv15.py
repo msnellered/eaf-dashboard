@@ -1527,54 +1527,78 @@ def update_bess_inputs_from_technology(selected_technology):
     opex_container_children = [fixed_om_input_group, om_kwhyr_input_group]
     return ( tech_data.get(KEY_EXAMPLE_PRODUCT, "N/A"), tech_data.get(KEY_SB_BOS_COST, 0), tech_data.get(KEY_PCS_COST, 0), tech_data.get(KEY_EPC_COST, 0), tech_data.get(KEY_SYS_INT_COST, 0), opex_container_children, tech_data.get(KEY_RTE, 0), tech_data.get(KEY_INSURANCE, 0), tech_data.get(KEY_DISCONNECT_COST, 0), tech_data.get(KEY_RECYCLING_COST, 0), tech_data.get(KEY_CYCLE_LIFE, 0), tech_data.get(KEY_DOD, 0), tech_data.get(KEY_CALENDAR_LIFE, 0), )
 
-# BESS Store Update (V7 Logic - State-based Update)
+# BESS Store Update (REVISED Logic - Always rebuild from tech + UI values)
 @app.callback(
     Output(STORE_BESS, "data"),
-    [Input(ID_BESS_CAPACITY, "value"), Input(ID_BESS_POWER, "value"), 
-     Input(ID_BESS_TECH_DROPDOWN, "value"), Input(ID_BESS_SB_BOS_COST, "value"), 
-     Input(ID_BESS_PCS_COST, "value"), Input(ID_BESS_EPC_COST, "value"), 
-     Input(ID_BESS_SYS_INT_COST, "value"), Input(ID_BESS_FIXED_OM, "value"), 
-     Input(ID_BESS_OM_KWHR_YR, "value"), Input(ID_BESS_RTE, "value"), 
-     Input(ID_BESS_INSURANCE, "value"), Input(ID_BESS_DISCONNECT_COST, "value"), 
-     Input(ID_BESS_RECYCLING_COST, "value"), Input(ID_BESS_CYCLE_LIFE, "value"), 
+    [Input(ID_BESS_CAPACITY, "value"), Input(ID_BESS_POWER, "value"),
+     Input(ID_BESS_TECH_DROPDOWN, "value"), Input(ID_BESS_SB_BOS_COST, "value"),
+     Input(ID_BESS_PCS_COST, "value"), Input(ID_BESS_EPC_COST, "value"),
+     Input(ID_BESS_SYS_INT_COST, "value"), Input(ID_BESS_FIXED_OM, "value"),
+     Input(ID_BESS_OM_KWHR_YR, "value"), Input(ID_BESS_RTE, "value"),
+     Input(ID_BESS_INSURANCE, "value"), Input(ID_BESS_DISCONNECT_COST, "value"),
+     Input(ID_BESS_RECYCLING_COST, "value"), Input(ID_BESS_CYCLE_LIFE, "value"),
      Input(ID_BESS_DOD, "value"), Input(ID_BESS_CALENDAR_LIFE, "value")],
-    State(STORE_BESS, "data"),
+    # No need for State(STORE_BESS, "data") anymore, as we rebuild it
     prevent_initial_call=True,
 )
-def update_bess_params_store(capacity, power, technology, sb_bos_cost, pcs_cost, 
-                             epc_cost, sys_int_cost, fixed_om, om_kwhyr, rte, 
-                             insurance, disconnect_cost, recycling_cost, cycle_life, 
-                             dod, calendar_life, existing_data):
-    # Force a complete store update instead of just updating triggered property
-    store_data = existing_data.copy() if existing_data and isinstance(existing_data, dict) else default_bess_params_store.copy()
-    
-    # Always update critical parameters regardless of what triggered the callback
+def update_bess_params_store(capacity, power, technology, sb_bos_cost, pcs_cost,
+                             epc_cost, sys_int_cost, fixed_om, om_kwhyr, rte,
+                             insurance, disconnect_cost, recycling_cost, cycle_life,
+                             dod, calendar_life):
+    """
+    Updates the BESS parameter store. Always rebuilds the dictionary based on
+    the selected technology template and then overwrites with current UI values
+    to ensure consistency.
+    """
+    print(f"DEBUG: update_bess_params_store triggered. Tech: {technology}, Cap: {capacity}, Pow: {power}") # Optional debug print
+
+    # Use selected technology, fallback to LFP if invalid
+    if not technology or technology not in bess_technology_data:
+        technology = "LFP"
+        print(f"DEBUG: Technology fallback to LFP.") # Optional debug print
+
+
+    # Start with the defaults for the currently selected technology
+    # Use .get() with a fallback to handle potential missing keys robustly
+    # Ensure default_bess_params_store exists and is structured correctly
+    default_tech_data = bess_technology_data.get(technology, bess_technology_data.get("LFP", {}))
+    store_data = default_tech_data.copy()
+
+    # ALWAYS overwrite with the current values from ALL the input fields
+    # Use .get() on inputs too in case they are None initially, although defaults should handle this
     store_data[KEY_CAPACITY] = capacity
     store_data[KEY_POWER_MAX] = power
-    store_data[KEY_TECH] = technology
-    
-    # Update other parameters based on what triggered the callback
-    triggered_id = ctx.triggered_id
-    if triggered_id == ID_BESS_SB_BOS_COST: store_data[KEY_SB_BOS_COST] = sb_bos_cost
-    elif triggered_id == ID_BESS_PCS_COST: store_data[KEY_PCS_COST] = pcs_cost
-    elif triggered_id == ID_BESS_EPC_COST: store_data[KEY_EPC_COST] = epc_cost
-    elif triggered_id == ID_BESS_SYS_INT_COST: store_data[KEY_SYS_INT_COST] = sys_int_cost
-    elif triggered_id == ID_BESS_RTE: store_data[KEY_RTE] = rte
-    elif triggered_id == ID_BESS_INSURANCE: store_data[KEY_INSURANCE] = insurance
-    elif triggered_id == ID_BESS_DISCONNECT_COST: store_data[KEY_DISCONNECT_COST] = disconnect_cost
-    elif triggered_id == ID_BESS_RECYCLING_COST: store_data[KEY_RECYCLING_COST] = recycling_cost
-    elif triggered_id == ID_BESS_CYCLE_LIFE: store_data[KEY_CYCLE_LIFE] = cycle_life
-    elif triggered_id == ID_BESS_DOD: store_data[KEY_DOD] = dod
-    elif triggered_id == ID_BESS_CALENDAR_LIFE: store_data[KEY_CALENDAR_LIFE] = calendar_life
-    
-    # Handle O&M properly
-    current_tech_in_store = store_data.get(KEY_TECH, "LFP")
-    intended_om_is_kwhyr = KEY_OM_KWHR_YR in bess_technology_data.get(current_tech_in_store, {})
-    if triggered_id == ID_BESS_FIXED_OM:
-        if not intended_om_is_kwhyr: store_data[KEY_FIXED_OM] = fixed_om; store_data.pop(KEY_OM_KWHR_YR, None)
-    elif triggered_id == ID_BESS_OM_KWHR_YR:
-        if intended_om_is_kwhyr: store_data[KEY_OM_KWHR_YR] = om_kwhyr; store_data.pop(KEY_FIXED_OM, None)
-    
+    store_data[KEY_TECH] = technology # Ensure correct tech is stored
+    store_data[KEY_SB_BOS_COST] = sb_bos_cost
+    store_data[KEY_PCS_COST] = pcs_cost
+    store_data[KEY_EPC_COST] = epc_cost
+    store_data[KEY_SYS_INT_COST] = sys_int_cost
+    store_data[KEY_RTE] = rte
+    store_data[KEY_INSURANCE] = insurance
+    store_data[KEY_DISCONNECT_COST] = disconnect_cost
+    store_data[KEY_RECYCLING_COST] = recycling_cost
+    store_data[KEY_CYCLE_LIFE] = cycle_life
+    store_data[KEY_DOD] = dod
+    store_data[KEY_CALENDAR_LIFE] = calendar_life
+
+    # Handle the mutually exclusive O&M fields based on the selected technology's template structure
+    tech_template = bess_technology_data.get(technology, {}) # Get the template again for structure check
+    if KEY_OM_KWHR_YR in tech_template:
+        # If template expects $/kWh/yr, use that input value and remove the other key
+        store_data[KEY_OM_KWHR_YR] = om_kwhyr
+        store_data.pop(KEY_FIXED_OM, None)
+    elif KEY_FIXED_OM in tech_template:
+        # If template expects $/kW/yr, use that input value and remove the other key
+        store_data[KEY_FIXED_OM] = fixed_om
+        store_data.pop(KEY_OM_KWHR_YR, None)
+    else:
+        # Fallback if template structure is missing O&M keys (should not happen with current data)
+        # Default to using fixed_om if unclear from template
+        print(f"WARN: O&M structure unclear for tech '{technology}'. Defaulting to Fixed O&M.") # Optional warning
+        store_data[KEY_FIXED_OM] = fixed_om
+        store_data.pop(KEY_OM_KWHR_YR, None)
+
+    # print(f"DEBUG: Updated STORE_BESS: {store_data}") # Optional debug print
     return store_data
 
 # --- Main Calculation Callback (Uses Advanced Metrics) ---
