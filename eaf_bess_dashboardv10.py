@@ -823,8 +823,8 @@ def create_technology_comparison_table(current_tech, capacity_mwh, power_mw):
     return comparison_table
 
 # Helper function to create input groups for BESS parameters with Tooltips
-def create_bess_input_group(label, input_id, value, unit, tooltip_text=None, type="number", step=None, min_val=0):
-    """Creates a standard row for a BESS parameter input with label, input, unit, and optional tooltip."""
+def create_bess_input_group(label, input_id, value, unit, tooltip_text=None, type="number", step=None, min_val=0, style=None): # Added style argument
+    """Creates a standard row for a BESS parameter input with label, input, unit, optional tooltip, and optional style."""
     label_content = [label]
     if tooltip_text:
         tooltip_id = f"{input_id}-tooltip"
@@ -833,6 +833,9 @@ def create_bess_input_group(label, input_id, value, unit, tooltip_text=None, typ
             html.I(className="fas fa-info-circle", id=tooltip_id, style={'cursor': 'pointer', 'color': '#6c757d'}), # Font Awesome icon
             dbc.Tooltip(tooltip_text, target=tooltip_id, placement="right")
         ])
+
+    # Apply the style to the outer Row component
+    row_style = style if style is not None else {}
 
     return dbc.Row(
         [
@@ -847,6 +850,7 @@ def create_bess_input_group(label, input_id, value, unit, tooltip_text=None, typ
             dbc.Col(html.Span(unit, className="input-group-text input-group-text-sm"), width=2) # Simple span for unit
         ],
         className="mb-2 align-items-center",
+        style=row_style # Apply the style here
     )
 
 # --- Main Layout Definition ---
@@ -1574,7 +1578,7 @@ def update_c_rate_display(capacity, power):
         return "" # Return empty if inputs are missing or invalid
 
 
-# BESS Inputs Update on Technology Dropdown Change
+# BESS Inputs Update on Technology Dropdown Change (REVISED TO ALWAYS RENDER O&M INPUTS)
 @app.callback(
     [
         Output(ID_BESS_EXAMPLE_PRODUCT, "children"),
@@ -1582,7 +1586,7 @@ def update_c_rate_display(capacity, power):
         Output(ID_BESS_PCS_COST, "value"),
         Output(ID_BESS_EPC_COST, "value"),
         Output(ID_BESS_SYS_INT_COST, "value"),
-        Output(ID_BESS_OPEX_CONTAINER, "children"), # Dynamically create O&M input
+        Output(ID_BESS_OPEX_CONTAINER, "children"), # Output remains the same container
         Output(ID_BESS_RTE, "value"),
         Output(ID_BESS_INSURANCE, "value"),
         Output(ID_BESS_DISCONNECT_COST, "value"),
@@ -1595,7 +1599,10 @@ def update_c_rate_display(capacity, power):
     prevent_initial_call=True
 )
 def update_bess_inputs_from_technology(selected_technology):
-    """Updates the detailed BESS parameter inputs when the technology dropdown changes."""
+    """
+    Updates the detailed BESS parameter inputs when the technology dropdown changes.
+    ALWAYS renders both O&M input groups within the container, hiding the irrelevant one via style.
+    """
     if not selected_technology or selected_technology not in bess_technology_data:
         print(f"DEBUG: Invalid or no technology selected ('{selected_technology}'), defaulting to LFP")
         selected_technology = "LFP" # Default to LFP if selection is invalid
@@ -1603,22 +1610,34 @@ def update_bess_inputs_from_technology(selected_technology):
     print(f"DEBUG: Loading UI defaults for technology: {selected_technology}")
     tech_data = bess_technology_data[selected_technology]
 
-    # Create the correct O&M input based on available data for the selected tech
-    if KEY_OM_KWHR_YR in tech_data:
-        # Use $/kWh/yr input
-        opex_input = create_bess_input_group("O&M Cost:", ID_BESS_OM_KWHR_YR, tech_data.get(KEY_OM_KWHR_YR, 0), "$/kWh/yr", tooltip_text="Annual Operation & Maintenance cost per kWh of energy capacity (e.g., for Supercapacitors).")
-    else:
-        # Default to fixed $/kW/yr input
-        opex_input = create_bess_input_group("Fixed O&M:", ID_BESS_FIXED_OM, tech_data.get(KEY_FIXED_OM, 0), "$/kW/yr", tooltip_text="Annual Fixed Operation & Maintenance cost per kW of power capacity (common for Li-ion, Flow).")
+    # Determine which O&M input to show
+    show_om_kwhyr = KEY_OM_KWHR_YR in tech_data
+    style_fixed_om = {'display': 'none'} if show_om_kwhyr else {'display': 'flex'} # Use flex for Row display
+    style_om_kwhyr = {'display': 'flex'} if show_om_kwhyr else {'display': 'none'} # Use flex for Row display
 
-    # Return the default values for the selected technology
+    # Create BOTH O&M input groups using the helper, applying the style
+    fixed_om_input_group = create_bess_input_group(
+        "Fixed O&M:", ID_BESS_FIXED_OM, tech_data.get(KEY_FIXED_OM, 0), "$/kW/yr",
+        tooltip_text="Annual Fixed Operation & Maintenance cost per kW of power capacity (common for Li-ion, Flow).",
+        style=style_fixed_om # Apply style to hide/show
+    )
+    om_kwhyr_input_group = create_bess_input_group(
+        "O&M Cost:", ID_BESS_OM_KWHR_YR, tech_data.get(KEY_OM_KWHR_YR, 0), "$/kWh/yr",
+        tooltip_text="Annual Operation & Maintenance cost per kWh of energy capacity (e.g., for Supercapacitors).",
+        style=style_om_kwhyr # Apply style to hide/show
+    )
+
+    # The children of the container will be a list containing both input groups
+    opex_container_children = [fixed_om_input_group, om_kwhyr_input_group]
+
+    # Return the default values for the selected technology, including the container children
     return (
         tech_data.get(KEY_EXAMPLE_PRODUCT, "N/A"),
         tech_data.get(KEY_SB_BOS_COST, 0),
         tech_data.get(KEY_PCS_COST, 0),
         tech_data.get(KEY_EPC_COST, 0),
         tech_data.get(KEY_SYS_INT_COST, 0),
-        opex_input, # Put the dynamically created input here
+        opex_container_children, # Pass the list containing both styled groups
         tech_data.get(KEY_RTE, 0),
         tech_data.get(KEY_INSURANCE, 0),
         tech_data.get(KEY_DISCONNECT_COST, 0),
