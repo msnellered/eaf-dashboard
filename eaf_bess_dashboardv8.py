@@ -685,7 +685,7 @@ def create_technology_comparison_table(current_tech, capacity_mwh, power_mw):
     def fmt_c(v): return f"${v:,.0f}" if pd.notna(v) else "N/A"
     
     # Technologies to compare (can be expanded)
-    techs_to_compare = ['LFP', 'NMC', 'Redox Flow (Vanadium)', 'Sodium-Ion', 'Iron-Air']
+    techs_to_compare = ['LFP', 'NMC', 'Redox Flow (Vanadium)', 'Sodium-Ion', 'Iron-Air', 'Hybrid Supercapacitor']
     
     # Ensure current tech is in the list
     if current_tech not in techs_to_compare:
