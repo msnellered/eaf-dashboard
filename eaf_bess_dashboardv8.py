@@ -449,14 +449,20 @@ def calculate_incentives(bess_params, incentive_params):
 
 # --- Financial Metrics Calculation Function ---
 # Needs significant modification to use new parameters
-def calculate_financial_metrics(
-    bess_params, financial_params, eaf_params, annual_savings, incentives_results
-):
+def calculate_financial_metrics(bess_params, financial_params, eaf_params, annual_savings, incentives_results):
     """Calculate NPV, IRR, payback period, etc. using detailed BESS parameters."""
-    # --- Get Technology ---
-    technology = bess_params.get("technology", "LFP")
-    print(f"DEBUG: Financial calculation using technology: {technology}")
-    print(f"DEBUG: Full BESS params received: {bess_params}")
+    
+    # CRITICAL FIX: Ensure we're using the correct technology
+    technology = bess_params.get("technology")
+    if not technology or technology not in bess_technology_data:
+        # If technology is missing or invalid, use the global debug variable
+        global current_selected_technology
+        technology = current_selected_technology
+        print(f"WARNING: Technology missing in bess_params, using {technology} from global variable")
+        # Also add the technology back to the params
+        bess_params["technology"] = technology
+    
+    print(f"DEBUG FINANCE: Using technology: {technology}")
     # Verify parameters match the selected technology
     print(f"DEBUG: BESS parameters used: cycle_life={bess_params.get('cycle_life')}, rte={bess_params.get('rte_percent')}")
     
@@ -631,9 +637,10 @@ def calculate_financial_metrics(
 
 
 # --- Optimization Function (Needs update to pass base params correctly) ---
-def optimize_battery_size(
-    eaf_params, utility_params, financial_params, incentive_params, bess_base_params # bess_base_params now contains tech-specific costs/perf
-):
+def optimize_battery_size(eaf_params, utility_params, financial_params, incentive_params, bess_base_params):
+    # Ensure technology is properly set and passed along
+    technology = bess_base_params.get("technology", "LFP")
+    print(f"DEBUG OPTIMIZE: Using technology: {technology}")
     """Find optimal battery size (Capacity MWh, Power MW) for best ROI using NPV as metric"""
     capacity_options = np.linspace(5, 100, 10)
     power_options = np.linspace(2, 50, 10)
@@ -1191,6 +1198,7 @@ def modify_tou_rows(add_clicks, remove_clicks_list, current_rows):
     [Input("calculate-results-button", "n_clicks"), Input("optimize-battery-button", "n_clicks"), Input("utility-params-store", "data"), Input("eaf-params-store", "data"), Input("bess-params-store", "data"), Input("financial-params-store", "data")],
     prevent_initial_call=True,
 )
+
 def validate_inputs(calc_clicks, opt_clicks, utility_params, eaf_params, bess_params, fin_params):
     ctx = dash.callback_context; triggered_id = ctx.triggered_id if ctx.triggered_id else 'initial_load_or_unknown'
     is_calc_attempt = triggered_id in ["calculate-results-button", "optimize-battery-button"]
@@ -1248,7 +1256,6 @@ def validate_inputs(calc_clicks, opt_clicks, utility_params, eaf_params, bess_pa
 )
 def update_bess_inputs_from_technology(selected_technology):
     if not selected_technology:
-        # Only default if actually empty, not if it's a valid but unexpected technology
         selected_technology = "LFP"
         print(f"DEBUG: No technology selected, defaulting to: {selected_technology}")
     elif selected_technology not in bess_technology_data:
@@ -1257,7 +1264,13 @@ def update_bess_inputs_from_technology(selected_technology):
     else:
         print(f"DEBUG: Using selected technology: {selected_technology}")
 
+    # IMPORTANT: Save the selected technology to a global variable for debugging
+    global current_selected_technology
+    current_selected_technology = selected_technology
+    
     tech_data = bess_technology_data[selected_technology]
+    
+    # Rest of your function remains the same...
 
     # Create the correct O&M input based on available data
     if "om_cost_per_kwh_yr" in tech_data:
