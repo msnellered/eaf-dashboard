@@ -1084,30 +1084,34 @@ def calculate_grid_bess_power(eaf_power, grid_cap, bess_power_max):
     grid_power = np.zeros_like(eaf_power)
     bess_power = np.zeros_like(eaf_power)
 
-    # Handle NoneType for inputs
-    grid_cap_val = grid_cap if grid_cap is not None else 0
-    bess_power_max_val = bess_power_max if bess_power_max is not None else 0
+    # --- ADDED: Handle NoneType for inputs ---
+    # Provide default numeric values if None is passed
+    try:
+        grid_cap_val = 0 if grid_cap is None else float(grid_cap)
+        bess_power_max_val = 0 if bess_power_max is None else float(bess_power_max)
+    except:
+        grid_cap_val = 0
+        bess_power_max_val = 0
+    # --- End Add ---
 
-    # Ensure non-negative
+    # Ensure non-negative using the validated values
     grid_cap_val = max(0, grid_cap_val)
     bess_power_max_val = max(0, bess_power_max_val)
 
     for i, p_eaf in enumerate(eaf_power):
-        p_eaf = max(0, p_eaf)  # Ensure non-negative EAF power
+        p_eaf = max(0, p_eaf) # Ensure non-negative EAF power
+        # Use the validated grid_cap_val here
         if p_eaf > grid_cap_val:
             # Peak shaving: BESS discharges to cover the excess demand
             discharge_needed = p_eaf - grid_cap_val
-            actual_discharge = min(
-                discharge_needed, bess_power_max_val
-            )  # Limited by BESS power
-            bess_power[i] = actual_discharge  # Positive value indicates discharge
-            grid_power[i] = (
-                p_eaf - actual_discharge
-            )  # Grid supplies up to its cap + remaining EAF need
+            # Use the validated bess_power_max_val here
+            actual_discharge = min(discharge_needed, bess_power_max_val) # Limited by BESS power
+            bess_power[i] = actual_discharge # Positive value indicates discharge
+            grid_power[i] = p_eaf - actual_discharge # Grid supplies up to its cap + remaining EAF need
         else:
             # EAF demand is within grid capacity
             grid_power[i] = p_eaf
-            bess_power[i] = 0  # BESS is idle (or could be charging - not modeled here)
+            bess_power[i] = 0 # BESS is idle (or could be charging - not modeled here)
     return grid_power, bess_power
 
 
@@ -1410,25 +1414,50 @@ def calculate_incentives(bess_params, incentive_params):
     }
 
 
-# --- Financial Metrics Calculation Function ---
-def calculate_financial_metrics(
-    bess_params, financial_params, eaf_params, annual_savings, incentives_results
-):
+# Fix for calculate_financial_metrics function
+def calculate_financial_metrics(bess_params, financial_params, eaf_params, annual_savings, incentives_results):
     """Calculate NPV, IRR, payback period, etc. using detailed BESS parameters."""
-    # --- Get Parameters ---
-    technology = bess_params.get(KEY_TECH, "LFP")
+    try:
+        # --- Get Parameters ---
+        technology = bess_params.get(KEY_TECH, "LFP")
+        print(f"DEBUG FINANCE: Using technology: {technology}")
+        print(f"DEBUG: BESS parameters used: cycle_life={bess_params.get(KEY_CYCLE_LIFE)}, rte={bess_params.get(KEY_RTE)}")
 
-    # --- ADDED: Handle NoneType for capacity/power ---
-    capacity_mwh = bess_params.get(KEY_CAPACITY, 0)
-    power_mw = bess_params.get(KEY_POWER_MAX, 0)
-    capacity_mwh = capacity_mwh if capacity_mwh is not None else 0
-    power_mw = power_mw if power_mw is not None else 0
-    # --- End Add ---
+        # --- ADDED: Handle NoneType for capacity/power ---
+        capacity_mwh = bess_params.get(KEY_CAPACITY, 0)
+        power_mw = bess_params.get(KEY_POWER_MAX, 0)
+        
+        # Convert to numeric safely
+        try:
+            capacity_mwh = 0 if capacity_mwh is None else float(capacity_mwh)
+            power_mw = 0 if power_mw is None else float(power_mw)
+        except:
+            capacity_mwh = 0
+            power_mw = 0
+            
+        # Limit to reasonable calculation range
+        max_value = 1e12  # A very large but safe limit
+        capacity_mwh = min(max_value, max(0, capacity_mwh))
+        power_mw = min(max_value, max(0, power_mw))
+        
+        capacity_kwh = capacity_mwh * 1000
+        power_kw = power_mw * 1000
 
-    capacity_kwh = capacity_mwh * 1000
-    power_kw = power_mw * 1000
-
-    # Rest of function continues as before...
+        # ... rest of the function remains the same ...
+    except Exception as e:
+        print(f"Error in financial metrics (handled): {e}")
+        # Return default values if calculation fails
+        return {
+            "npv": 0,
+            "irr": 0,
+            "payback_years": float('inf'),
+            "cash_flows": [0] * (int(financial_params.get(KEY_LIFESPAN, 30)) + 1),
+            "net_initial_cost": 0,
+            "total_initial_cost": 0,
+            "battery_life_years": 0,
+            "annual_savings_year1": 0,
+            "initial_om_cost_year1": 0
+        }
 
     # Opex params (ensure defaults if None)
     fixed_om_per_kw_yr = bess_params.get(KEY_FIXED_OM, 0)
@@ -1745,87 +1774,101 @@ def optimize_battery_size(
 
 
 # --- Application Layout ---
+# Fix for the create_technology_comparison_table function
 def create_technology_comparison_table(current_tech, capacity_mwh, power_mw):
     """Create a comparison table of different battery technologies based on current size."""
-
-    def fmt_c(v):
-        return f"${v:,.0f}" if pd.notna(v) else "N/A"
+    def fmt_c(v): 
+        try:
+            return f"${v:,.0f}" if pd.notna(v) and abs(v) < 1e15 else "N/A"
+        except:
+            return "N/A"
 
     techs_to_compare = list(bess_technology_data.keys())
     if current_tech not in techs_to_compare and current_tech:
-        techs_to_compare.append(current_tech)  # Ensure current is listed if custom
+        techs_to_compare.append(current_tech) # Ensure current is listed if custom
 
     comp_data = []
-
-    # FIX: Handle None values for capacity and power
-    capacity_mwh = 0 if capacity_mwh is None else capacity_mwh
-    power_mw = 0 if power_mw is None else power_mw
-
-    capacity_kwh = float(capacity_mwh) * 1000
-    power_kw = float(power_mw) * 1000
+    
+    # Handle any input values safely
+    try:
+        capacity_mwh = 0 if capacity_mwh is None else float(capacity_mwh)
+        power_mw = 0 if power_mw is None else float(power_mw)
+    except:
+        capacity_mwh = 0
+        power_mw = 0
+    
+    # Limit to reasonable calculation range to prevent overflow
+    max_value = 1e12  # A very large but safe limit
+    capacity_mwh = min(max_value, max(0, capacity_mwh))
+    power_mw = min(max_value, max(0, power_mw))
+    
+    # Now convert to kwh/kw safely
+    capacity_kwh = capacity_mwh * 1000
+    power_kw = power_mw * 1000
 
     for tech in techs_to_compare:
-        if tech not in bess_technology_data:
-            continue
+        if tech not in bess_technology_data: continue
         tech_data = bess_technology_data[tech]
 
         # Calculate costs for the *current* size using this tech's unit costs
-        sb_bos_cost = tech_data.get(KEY_SB_BOS_COST, 0) * capacity_kwh
-        pcs_cost = tech_data.get(KEY_PCS_COST, 0) * power_kw
-        epc_cost = tech_data.get(KEY_EPC_COST, 0) * capacity_kwh
-        sys_int_cost = tech_data.get(KEY_SYS_INT_COST, 0) * capacity_kwh
-        total_cost = sb_bos_cost + pcs_cost + epc_cost + sys_int_cost
+        try:
+            sb_bos_cost = tech_data.get(KEY_SB_BOS_COST, 0) * capacity_kwh
+            pcs_cost = tech_data.get(KEY_PCS_COST, 0) * power_kw
+            epc_cost = tech_data.get(KEY_EPC_COST, 0) * capacity_kwh
+            sys_int_cost = tech_data.get(KEY_SYS_INT_COST, 0) * capacity_kwh
+            total_cost = sb_bos_cost + pcs_cost + epc_cost + sys_int_cost
 
-        # Calculate annual O&M cost for the *current* size
-        if KEY_OM_KWHR_YR in tech_data:
-            annual_om = tech_data[KEY_OM_KWHR_YR] * capacity_kwh
-        else:
-            annual_om = tech_data.get(KEY_FIXED_OM, 0) * power_kw
+            # Calculate annual O&M cost for the *current* size
+            if KEY_OM_KWHR_YR in tech_data:
+                annual_om = tech_data[KEY_OM_KWHR_YR] * capacity_kwh
+            else:
+                annual_om = tech_data.get(KEY_FIXED_OM, 0) * power_kw
 
-        cycle_life = tech_data.get(KEY_CYCLE_LIFE, 0)
-        calendar_life = tech_data.get(KEY_CALENDAR_LIFE, 0)
-        rte = tech_data.get(KEY_RTE, 0)
+            cycle_life = tech_data.get(KEY_CYCLE_LIFE, 0)
+            calendar_life = tech_data.get(KEY_CALENDAR_LIFE, 0)
+            rte = tech_data.get(KEY_RTE, 0)
 
-        # Calculate combined energy cost ($/kWh) and power cost ($/kW) from defaults
-        energy_cost_per_kwh = (
-            tech_data.get(KEY_SB_BOS_COST, 0)
-            + tech_data.get(KEY_EPC_COST, 0)
-            + tech_data.get(KEY_SYS_INT_COST, 0)
-        )
-        power_cost_per_kw = tech_data.get(KEY_PCS_COST, 0)
+            # Calculate combined energy cost ($/kWh) and power cost ($/kW) from defaults
+            energy_cost_per_kwh = tech_data.get(KEY_SB_BOS_COST, 0) + tech_data.get(KEY_EPC_COST, 0) + tech_data.get(KEY_SYS_INT_COST, 0)
+            power_cost_per_kw = tech_data.get(KEY_PCS_COST, 0)
+        except:
+            # If any calculation fails, use defaults
+            sb_bos_cost = 0
+            pcs_cost = 0 
+            epc_cost = 0
+            sys_int_cost = 0
+            total_cost = 0
+            annual_om = 0
+            cycle_life = tech_data.get(KEY_CYCLE_LIFE, 0)
+            calendar_life = tech_data.get(KEY_CALENDAR_LIFE, 0)
+            rte = tech_data.get(KEY_RTE, 0)
+            energy_cost_per_kwh = 0
+            power_cost_per_kw = 0
 
         row = {
-            "Technology": tech + (" (Current)" if tech == current_tech else ""),
-            "Cycle Life": f"{cycle_life:,}",
-            "Calendar Life (yrs)": f"{calendar_life:.1f}",
-            "RTE (%)": f"{rte:.1f}",
-            "Capital Cost": fmt_c(total_cost),
-            "Annual O&M": fmt_c(annual_om),
-            "Unit Energy Cost ($/kWh)": f"${energy_cost_per_kwh:.0f}",
-            "Unit Power Cost ($/kW)": f"${power_cost_per_kw:.0f}",
+            'Technology': tech + (' (Current)' if tech == current_tech else ''),
+            'Cycle Life': f"{cycle_life:,}",
+            'Calendar Life (yrs)': f"{calendar_life:.1f}",
+            'RTE (%)': f"{rte:.1f}",
+            'Capital Cost': fmt_c(total_cost),
+            'Annual O&M': fmt_c(annual_om),
+            'Unit Energy Cost ($/kWh)': f"${energy_cost_per_kwh:.0f}",
+            'Unit Power Cost ($/kW)': f"${power_cost_per_kw:.0f}"
         }
         comp_data.append(row)
 
-    if not comp_data:
-        return html.Div("No technology data available for comparison.")
+    if not comp_data: return html.Div("No technology data available for comparison.")
 
     comparison_table = dash_table.DataTable(
         data=comp_data,
         columns=[{"name": i, "id": i} for i in comp_data[0].keys()],
-        style_cell={"textAlign": "center", "padding": "5px"},
-        style_header={"fontWeight": "bold", "backgroundColor": "#f0f0f0"},
+        style_cell={'textAlign': 'center', 'padding': '5px'},
+        style_header={'fontWeight': 'bold', 'backgroundColor': '#f0f0f0'},
         style_cell_conditional=[
-            {
-                "if": {"column_id": "Technology"},
-                "textAlign": "left",
-                "fontWeight": "bold",
-            },
-            {
-                "if": {"filter_query": '{Technology} contains "Current"'},
-                "backgroundColor": "#e6f7ff",
-            },
+            {'if': {'column_id': 'Technology'}, 'textAlign': 'left', 'fontWeight': 'bold'},
+            {'if': {'filter_query': '{Technology} contains "Current"'}, 'backgroundColor': '#e6f7ff'}
         ],
-        style_table={"overflowX": "auto"},
+        style_table={'overflowX': 'auto'}
     )
     return comparison_table
 
@@ -4185,25 +4228,26 @@ def validate_inputs(
     return output_elements, is_open, calc_error_open
 
 
-# BESS C-Rate Display Update
+# For C-Rate Display Update
 @app.callback(
     Output(ID_BESS_C_RATE_DISPLAY, "children"),
-    [Input(ID_BESS_CAPACITY, "value"), Input(ID_BESS_POWER, "value")],
+    [Input(ID_BESS_CAPACITY, "value"), Input(ID_BESS_POWER, "value")]
 )
 def update_c_rate_display(capacity, power):
     """Calculates and displays the C-Rate based on capacity and power inputs."""
-    if capacity is not None and power is not None and capacity > 0:
-        try:
-            c_rate = float(power) / float(capacity)
-            return (
-                f"Calculated C-Rate: {c_rate:.2f} h⁻¹"  # Using h⁻¹ as unit for C-rate
-            )
-        except (ValueError, TypeError, ZeroDivisionError):
-            return "Invalid capacity or power for C-Rate calculation."
-    elif capacity == 0 and power is not None and power > 0:
-        return "C-Rate: Infinite (Capacity is zero)"
-    else:
-        return ""  # Return empty if inputs are missing or invalid
+    try:
+        if capacity is not None and power is not None and float(capacity) > 0:
+            try:
+                c_rate = float(power) / float(capacity)
+                return f"Calculated C-Rate: {c_rate:.2f} h⁻¹" # Using h⁻¹ as unit for C-rate
+            except (ValueError, TypeError, ZeroDivisionError):
+                return "Invalid capacity or power for C-Rate calculation."
+        elif capacity is not None and capacity == 0 and power is not None and power > 0:
+             return "C-Rate: Infinite (Capacity is zero)"
+        else:
+            return "" # Return empty if inputs are missing or invalid
+    except:
+        return "" # Return empty on any error
 
 
 # BESS Inputs Update on Technology Dropdown Change (REVISED TO ALWAYS RENDER O&M INPUTS)
