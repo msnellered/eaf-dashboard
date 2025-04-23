@@ -193,7 +193,7 @@ bess_technology_data = {
         "calendar_life": 20,         # Placeholder
     },
     "Hybrid Supercapacitor": {
-        "example_product": "Generic Hybrid Supercapacitor System",
+        "example_product": "Hycap Hybrid Supercapacitor System",
         # Capex - User provided cost, split estimate between SB/PCS
         "sb_bos_cost_per_kwh": 900,  # High energy cost ($/kWh)
         "pcs_cost_per_kw": 100,      # Power cost ($/kW) assumed lower part of total
@@ -456,7 +456,7 @@ def calculate_financial_metrics(
     # --- Get Technology ---
     technology = bess_params.get("technology", "LFP")
     print(f"DEBUG: Financial calculation using technology: {technology}")
-
+    print(f"DEBUG: Full BESS params received: {bess_params}")
     # Verify parameters match the selected technology
     print(f"DEBUG: BESS parameters used: cycle_life={bess_params.get('cycle_life')}, rte={bess_params.get('rte_percent')}")
     
