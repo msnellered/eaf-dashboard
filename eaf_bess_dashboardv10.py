@@ -459,17 +459,19 @@ def calculate_incentives(bess_params, incentive_params):
     pprint.pprint(bess_params)
     print("---------------------------------\n")
     # --- END DEBUG PRINT ---
-    # REMOVED call to ensure_correct_technology_parameters
-    # ... (rest of the function remains the same)
 
     total_incentive = 0
     incentive_breakdown = {}
 
     # --- Calculate Initial BESS Cost using helper function ---
+    # Helper function already handles None for capacity/power inside it
     total_cost = calculate_initial_bess_cost(bess_params)
+
+    # --- ADDED: Handle NoneType for capacity before calculating kWh ---
     capacity_mwh = bess_params.get(KEY_CAPACITY, 0)
+    capacity_mwh = capacity_mwh if capacity_mwh is not None else 0
+    # --- End Add ---
     capacity_kwh = capacity_mwh * 1000
-    # --- End Cost Calculation ---
 
     def get_incentive_param(key, default): return incentive_params.get(key, default)
 
@@ -1655,12 +1657,12 @@ def update_bess_inputs_from_technology(selected_technology):
         tech_data.get(KEY_CALENDAR_LIFE, 0),
     )
 
-# BESS Store Update (REVISED LOGIC V5 - Trigger on All Inputs, Careful Handling)
+# BESS Store Update (REVISED LOGIC V6 - Direct Input Construction)
 @app.callback(
     Output(STORE_BESS, "data"),
     [
         # --- INPUTS ---
-        # ALL relevant BESS inputs are now triggers
+        # ALL relevant BESS inputs remain triggers
         Input(ID_BESS_CAPACITY, "value"),
         Input(ID_BESS_POWER, "value"),
         Input(ID_BESS_TECH_DROPDOWN, "value"),
@@ -1668,7 +1670,6 @@ def update_bess_inputs_from_technology(selected_technology):
         Input(ID_BESS_PCS_COST, "value"),
         Input(ID_BESS_EPC_COST, "value"),
         Input(ID_BESS_SYS_INT_COST, "value"),
-        # Add BOTH potential O&M inputs as triggers
         Input(ID_BESS_FIXED_OM, "value"),
         Input(ID_BESS_OM_KWHR_YR, "value"),
         Input(ID_BESS_RTE, "value"),
@@ -1679,11 +1680,7 @@ def update_bess_inputs_from_technology(selected_technology):
         Input(ID_BESS_DOD, "value"),
         Input(ID_BESS_CALENDAR_LIFE, "value"),
     ],
-    [
-        # --- STATE ---
-        # Get previous store data to use as a base for non-dropdown changes
-        State(STORE_BESS, "data")
-    ],
+    # No State needed for this approach
     prevent_initial_call=True
 )
 def update_bess_params_store(
@@ -1692,143 +1689,88 @@ def update_bess_params_store(
     sb_bos_cost, pcs_cost, epc_cost, sys_int_cost,
     fixed_om, om_kwhyr, # Read both O&M inputs
     rte, insurance, disconnect_cost, recycling_cost,
-    cycle_life, dod, calendar_life,
-    # State value
-    previous_bess_data
+    cycle_life, dod, calendar_life
 ):
     """
     Updates the BESS parameter store based on ANY BESS input change.
-    V5: Handles dropdown trigger by reloading defaults.
-        Handles other triggers by updating the specific field in the previous state.
+    V6: Directly constructs the store data from current input arguments every time.
     """
     ctx = dash.callback_context
     if not ctx.triggered_id or not ctx.triggered:
-        print("DEBUG update_bess_params_store (V5): No trigger ID, returning no_update")
+        print("DEBUG update_bess_params_store (V6): No trigger ID, returning no_update")
         return dash.no_update
 
     # Use pprint for cleaner dictionary printing in logs
     import pprint
 
-    # Determine the ID and value that triggered the callback
-    # Handle pattern-matching IDs if they were used (though not for these specific IDs)
     triggered_prop_id = ctx.triggered[0]['prop_id']
-    triggered_value = ctx.triggered[0]['value']
-    # Extract the base component ID (e.g., "bess-capacity" from "bess-capacity.value")
     triggered_id_base = triggered_prop_id.split('.')[0]
 
-    print(f"\n--- DEBUG update_bess_params_store (V5) ---")
+    print(f"\n--- DEBUG update_bess_params_store (V6) ---")
     print(f"Triggered by: {triggered_id_base} (Prop: {triggered_prop_id})")
-    print(f"Triggered Value: {triggered_value}")
-    # print(f"Current Dropdown Value: {technology}") # Value from Input arg
-    # print(f"Previous Store Data:") # Optional: Can be verbose
-    # pprint.pprint(previous_bess_data)
+    print(f"Input Args: Cap={capacity}, Pow={power}, Tech={technology}, SB+BOS={sb_bos_cost}...") # Log key inputs
 
-    # Initialize new_store_data
-    # Use previous data if valid, otherwise start with LFP defaults
-    if previous_bess_data and isinstance(previous_bess_data, dict):
-        # IMPORTANT: Create a copy to modify, don't change the original state object
-        new_store_data = previous_bess_data.copy()
-        print("  Base: Using previous store data.")
-    else:
-        print("  Base: No valid previous data, using LFP defaults.")
-        new_store_data = default_bess_params_store.copy() # Start with LFP
+    # --- Always construct the dictionary from current inputs ---
+    new_store_data = {}
 
-    # --- Case 1: Technology Dropdown Changed ---
+    # 1. Get base defaults ONLY if dropdown triggered, otherwise start empty
     if triggered_id_base == ID_BESS_TECH_DROPDOWN:
-        print(f"-> Dropdown Trigger: Reloading defaults for '{technology}'")
-        selected_technology = technology # Value from the input argument
+        print(f"-> Dropdown Trigger: Loading defaults for '{technology}' as base.")
+        selected_technology = technology
         if selected_technology not in bess_technology_data:
             print(f"  WARNING: Invalid technology '{selected_technology}'. Defaulting to LFP.")
-            selected_technology = "LFP" # Fallback
-
-        # Start fresh with the defaults for the selected technology
-        tech_defaults = bess_technology_data[selected_technology].copy() # Deep copy
-        new_store_data = tech_defaults
-        new_store_data[KEY_TECH] = selected_technology
-        new_store_data[KEY_EXAMPLE_PRODUCT] = tech_defaults.get(KEY_EXAMPLE_PRODUCT, "N/A")
-
-        # Apply the current Capacity and Power inputs (read from args)
-        new_store_data[KEY_CAPACITY] = capacity
-        new_store_data[KEY_POWER_MAX] = power
-        print(f"  Defaults loaded for {selected_technology}. Capacity={capacity}, Power={power}.")
-
-    # --- Case 2: Other BESS Input Changed ---
+            selected_technology = "LFP"
+        # Start with the defaults for the selected technology
+        tech_defaults = bess_technology_data[selected_technology].copy()
+        new_store_data = tech_defaults # Use defaults as the starting point
     else:
-        print(f"-> Input Trigger ({triggered_id_base}): Updating specific field.")
-        # Update the specific field that triggered the callback using its value
-        # The 'new_store_data' is based on the previous state here.
+        # For other triggers, we will populate fields directly.
+        # We still need the tech name from the dropdown argument.
+        print(f"-> Input Trigger ({triggered_id_base}): Building from arguments.")
+        selected_technology = technology # Get tech from dropdown arg
+        if selected_technology not in bess_technology_data:
+             print(f"  WARNING: Invalid technology '{selected_technology}' in dropdown. Using LFP.")
+             selected_technology = "LFP"
+        # Get example product for the current tech
+        new_store_data[KEY_EXAMPLE_PRODUCT] = bess_technology_data[selected_technology].get(KEY_EXAMPLE_PRODUCT, "N/A")
 
-        # Update based on triggered ID
-        if triggered_id_base == ID_BESS_CAPACITY: new_store_data[KEY_CAPACITY] = triggered_value
-        elif triggered_id_base == ID_BESS_POWER: new_store_data[KEY_POWER_MAX] = triggered_value
-        elif triggered_id_base == ID_BESS_SB_BOS_COST: new_store_data[KEY_SB_BOS_COST] = triggered_value
-        elif triggered_id_base == ID_BESS_PCS_COST: new_store_data[KEY_PCS_COST] = triggered_value
-        elif triggered_id_base == ID_BESS_EPC_COST: new_store_data[KEY_EPC_COST] = triggered_value
-        elif triggered_id_base == ID_BESS_SYS_INT_COST: new_store_data[KEY_SYS_INT_COST] = triggered_value
-        elif triggered_id_base == ID_BESS_RTE: new_store_data[KEY_RTE] = triggered_value
-        elif triggered_id_base == ID_BESS_INSURANCE: new_store_data[KEY_INSURANCE] = triggered_value
-        elif triggered_id_base == ID_BESS_DISCONNECT_COST: new_store_data[KEY_DISCONNECT_COST] = triggered_value
-        elif triggered_id_base == ID_BESS_RECYCLING_COST: new_store_data[KEY_RECYCLING_COST] = triggered_value
-        elif triggered_id_base == ID_BESS_CYCLE_LIFE: new_store_data[KEY_CYCLE_LIFE] = triggered_value
-        elif triggered_id_base == ID_BESS_DOD: new_store_data[KEY_DOD] = triggered_value
-        elif triggered_id_base == ID_BESS_CALENDAR_LIFE: new_store_data[KEY_CALENDAR_LIFE] = triggered_value
-        # Handle O&M inputs: update the triggered one and clear the other
-        elif triggered_id_base == ID_BESS_FIXED_OM:
-            new_store_data[KEY_FIXED_OM] = triggered_value
-            if KEY_OM_KWHR_YR in new_store_data: del new_store_data[KEY_OM_KWHR_YR]
-            print("  Updated Fixed O&M, cleared OM/kWh/yr key.")
-        elif triggered_id_base == ID_BESS_OM_KWHR_YR:
-            new_store_data[KEY_OM_KWHR_YR] = triggered_value
-            if KEY_FIXED_OM in new_store_data: del new_store_data[KEY_FIXED_OM]
-            print("  Updated OM/kWh/yr, cleared Fixed O&M key.")
 
-        # Ensure the technology key still matches the dropdown value
-        # This prevents the store from having data for one tech while the dropdown shows another
-        current_dropdown_tech = technology # Read from input arg
-        if new_store_data.get(KEY_TECH) != current_dropdown_tech:
-            print(f"  WARNING: Store tech ({new_store_data.get(KEY_TECH)}) differs from dropdown ({current_dropdown_tech}). Forcing store tech to match dropdown.")
-            # If the tech differs, it implies the dropdown changed *without* triggering
-            # the store update itself (less likely but possible). We should probably
-            # reload defaults for the dropdown tech in this edge case.
-            # Let's reload defaults for safety here.
-            if current_dropdown_tech not in bess_technology_data: current_dropdown_tech = "LFP"
-            tech_defaults = bess_technology_data[current_dropdown_tech].copy()
-            # Keep the just-updated value
-            updated_key = None
-            if triggered_id_base == ID_BESS_CAPACITY: updated_key = KEY_CAPACITY
-            elif triggered_id_base == ID_BESS_POWER: updated_key = KEY_POWER_MAX
-            # ... add all other elifs corresponding to the keys ...
-            elif triggered_id_base == ID_BESS_SB_BOS_COST: updated_key = KEY_SB_BOS_COST
-            elif triggered_id_base == ID_BESS_PCS_COST: updated_key = KEY_PCS_COST
-            elif triggered_id_base == ID_BESS_EPC_COST: updated_key = KEY_EPC_COST
-            elif triggered_id_base == ID_BESS_SYS_INT_COST: updated_key = KEY_SYS_INT_COST
-            elif triggered_id_base == ID_BESS_RTE: updated_key = KEY_RTE
-            elif triggered_id_base == ID_BESS_INSURANCE: updated_key = KEY_INSURANCE
-            elif triggered_id_base == ID_BESS_DISCONNECT_COST: updated_key = KEY_DISCONNECT_COST
-            elif triggered_id_base == ID_BESS_RECYCLING_COST: updated_key = KEY_RECYCLING_COST
-            elif triggered_id_base == ID_BESS_CYCLE_LIFE: updated_key = KEY_CYCLE_LIFE
-            elif triggered_id_base == ID_BESS_DOD: updated_key = KEY_DOD
-            elif triggered_id_base == ID_BESS_CALENDAR_LIFE: updated_key = KEY_CALENDAR_LIFE
-            elif triggered_id_base == ID_BESS_FIXED_OM: updated_key = KEY_FIXED_OM
-            elif triggered_id_base == ID_BESS_OM_KWHR_YR: updated_key = KEY_OM_KWHR_YR
+    # 2. Overwrite ALL fields with current input argument values
+    new_store_data[KEY_TECH] = selected_technology # Ensure tech name is correct
+    new_store_data[KEY_CAPACITY] = capacity
+    new_store_data[KEY_POWER_MAX] = power
+    new_store_data[KEY_SB_BOS_COST] = sb_bos_cost
+    new_store_data[KEY_PCS_COST] = pcs_cost
+    new_store_data[KEY_EPC_COST] = epc_cost
+    new_store_data[KEY_SYS_INT_COST] = sys_int_cost
+    new_store_data[KEY_RTE] = rte
+    new_store_data[KEY_INSURANCE] = insurance
+    new_store_data[KEY_DISCONNECT_COST] = disconnect_cost
+    new_store_data[KEY_RECYCLING_COST] = recycling_cost
+    new_store_data[KEY_CYCLE_LIFE] = cycle_life
+    new_store_data[KEY_DOD] = dod
+    new_store_data[KEY_CALENDAR_LIFE] = calendar_life
 
-            # Reload defaults but preserve the value that just changed
-            new_store_data = tech_defaults
-            new_store_data[KEY_TECH] = current_dropdown_tech
-            new_store_data[KEY_EXAMPLE_PRODUCT] = tech_defaults.get(KEY_EXAMPLE_PRODUCT, "N/A")
-            new_store_data[KEY_CAPACITY] = capacity # Keep current capacity/power
-            new_store_data[KEY_POWER_MAX] = power
-            if updated_key:
-                 new_store_data[updated_key] = triggered_value # Re-apply the specific change
-                 print(f"  Reloaded defaults for {current_dropdown_tech} due to mismatch, but preserved change to {updated_key}.")
-            else:
-                 print(f"  Reloaded defaults for {current_dropdown_tech} due to mismatch.")
+    # 3. Handle O&M based on which *argument* has a value
+    #    (assuming the UI callback correctly hides one input, making its value None)
+    #    If fixed_om has a value (likely not None), use it.
+    #    Need to know which O&M type is *intended* for the current technology.
+    intended_om_is_kwhyr = KEY_OM_KWHR_YR in bess_technology_data[selected_technology]
+
+    if intended_om_is_kwhyr:
+        new_store_data[KEY_OM_KWHR_YR] = om_kwhyr # Use the value from the $/kWh/yr input arg
+        if KEY_FIXED_OM in new_store_data: del new_store_data[KEY_FIXED_OM] # Remove the other key
+        print(f"  Using O&M/kWh/yr: {om_kwhyr}")
+    else:
+        new_store_data[KEY_FIXED_OM] = fixed_om # Use the value from the $/kW/yr input arg
+        if KEY_OM_KWHR_YR in new_store_data: del new_store_data[KEY_OM_KWHR_YR] # Remove the other key
+        print(f"  Using Fixed O&M: {fixed_om}")
 
 
     # --- Final Log and Return ---
     print(f"FINAL Stored BESS Params (Tech: {new_store_data.get(KEY_TECH)}):")
     pprint.pprint(new_store_data)
-    print(f"--- END DEBUG update_bess_params_store (V5) ---\n")
+    print(f"--- END DEBUG update_bess_params_store (V6) ---\n")
     return new_store_data
 
 
