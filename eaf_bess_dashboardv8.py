@@ -1421,9 +1421,14 @@ def display_calculation_results(n_clicks, eaf_params, bess_params, utility_param
             fig_single_cycle.add_annotation(x=plot_cycle_duration_min * 0.9, y=grid_cap_val + max_y_plot * 0.03, text=f"Grid Cap ({grid_cap_val} MW)", showarrow=False, font=dict(color='black', size=10))
         else: fig_single_cycle.update_layout(xaxis = {'visible': False}, yaxis = {'visible': False}, annotations = [{'text': 'Error generating plot data', 'xref': 'paper', 'yref': 'paper', 'showarrow': False, 'font': {'size': 16}}])
         fig_single_cycle.update_layout(title=f'Simulated EAF Cycle Profile ({eaf_params.get("eaf_size", "N/A")}-ton)', xaxis_title=f"Time in Cycle (minutes, Duration: {plot_cycle_duration_min:.1f} min)", yaxis_title="Power (MW)", yaxis_range=[0, max_y_plot], showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), template="plotly_white", margin=dict(l=40, r=20, t=50, b=40))
-
+        # Technology comparison table
+        tech_comparison = create_technology_comparison_table(
+            bess_params.get("technology", "LFP"),
+            bess_params.get("capacity", 0),
+            bess_params.get("power_max", 0)
+        )
         # --- Assemble ---
-        results_output = html.Div([ html.H3("Calculation Results", className="mb-4"), dbc.Row([ dbc.Col(metrics_card, lg=4, md=6), dbc.Col(savings_card, lg=4, md=6), dbc.Col(incentives_card, lg=4, md=12), ], className="mb-4"), html.H4("Monthly Billing Breakdown", className="mb-3"), monthly_table, html.H4("Single Cycle Power Profile", className="mt-4 mb-3"), dcc.Graph(figure=fig_single_cycle), html.H4("Cash Flow Analysis", className="mt-4 mb-3"), dcc.Graph(figure=fig_cashflow), ])
+        results_output = html.Div([ html.H3("Calculation Results", className="mb-4"), dbc.Row([ dbc.Col(metrics_card, lg=4, md=6), dbc.Col(savings_card, lg=4, md=6), dbc.Col(incentives_card, lg=4, md=12), ], className="mb-4"), html.H4("Technology Comparison", className="mt-r mb-3"), tech_comparison, html.H4("Monthly Billing Breakdown", className="mb-3"), monthly_table, html.H4("Single Cycle Power Profile", className="mt-4 mb-3"), dcc.Graph(figure=fig_single_cycle), html.H4("Cash Flow Analysis", className="mt-4 mb-3"), dcc.Graph(figure=fig_cashflow), ])
         error_output = ""; error_open = False
 
     except Exception as e:
