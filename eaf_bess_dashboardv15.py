@@ -1688,8 +1688,9 @@ def display_advanced_calculation_results(n_clicks, eaf_params, bess_params, util
             )
 
         # --- Graphs (Updated for Project & Equity CF) ---
-        years = len(years_cf) - 1  # Subtract 1 since years_cf includes year 0
+        
         years_cf = list(range(int(financial_params.get(KEY_LIFESPAN, 30)) + 1))
+        years = len(years_cf) - 1  # Subtract 1 since years_cf includes year 0
         project_cf_data = financial_metrics.get("project_cash_flows", [])
         equity_cf_data = financial_metrics.get("equity_cash_flows", [])
         if len(project_cf_data) != len(years_cf): project_cf_data = project_cf_data[:len(years_cf)] + [0] * (len(years_cf) - len(project_cf_data))
