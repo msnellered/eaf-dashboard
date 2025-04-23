@@ -453,7 +453,13 @@ def calculate_financial_metrics(
     bess_params, financial_params, eaf_params, annual_savings, incentives_results
 ):
     """Calculate NPV, IRR, payback period, etc. using detailed BESS parameters."""
+    # --- Get Technology ---
+    technology = bess_params.get("technology", "LFP")
+    print(f"DEBUG: Financial calculation using technology: {technology}")
 
+    # Verify parameters match the selected technology
+    print(f"DEBUG: BESS parameters used: cycle_life={bess_params.get('cycle_life')}, rte={bess_params.get('rte_percent')}")
+    
     # --- Get Parameters ---
     # BESS Parameters from store
     capacity_mwh = bess_params.get("capacity", 0)
@@ -1241,9 +1247,15 @@ def validate_inputs(calc_clicks, opt_clicks, utility_params, eaf_params, bess_pa
     prevent_initial_call=True
 )
 def update_bess_inputs_from_technology(selected_technology):
-    if not selected_technology or selected_technology not in bess_technology_data:
-        # Handle error or default case, maybe revert to LFP?
+    if not selected_technology:
+        # Only default if actually empty, not if it's a valid but unexpected technology
         selected_technology = "LFP"
+        print(f"DEBUG: No technology selected, defaulting to: {selected_technology}")
+    elif selected_technology not in bess_technology_data:
+        print(f"DEBUG: Unknown technology '{selected_technology}', defaulting to LFP")
+        selected_technology = "LFP"
+    else:
+        print(f"DEBUG: Using selected technology: {selected_technology}")
 
     tech_data = bess_technology_data[selected_technology]
 
@@ -1308,9 +1320,9 @@ def update_bess_params_store(
 
     # Build the dictionary for the store
     bess_store_data = {
+        "technology": technology,
         "capacity": capacity,
         "power_max": power,
-        "technology": technology,
         "sb_bos_cost_per_kwh": sb_bos_cost,
         "pcs_cost_per_kw": pcs_cost,
         "epc_cost_per_kwh": epc_cost,
