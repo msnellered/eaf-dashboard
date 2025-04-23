@@ -386,6 +386,9 @@ def calculate_annual_billings(eaf_params, bess_params, utility_params):
 # Needs modification to calculate total_cost based on new parameters
 def calculate_incentives(bess_params, incentive_params):
     """Calculate total incentives based on selected programs."""
+    # Force the correct technology parameters
+    bess_params = ensure_correct_technology_parameters(bess_params)
+    
     total_incentive = 0
     incentive_breakdown = {}
 
@@ -446,11 +449,56 @@ def calculate_incentives(bess_params, incentive_params):
 
     return {"total_incentive": total_incentive, "breakdown": incentive_breakdown, "calculated_initial_cost": total_cost}
 
+def ensure_correct_technology_parameters(bess_params):
+    """Ensures the BESS parameters match the selected technology."""
+    # Get the selected technology
+    technology = bess_params.get("technology", "LFP")
+    
+    # Print debug info
+    print(f"FIXING TECHNOLOGY PARAMETERS: Selected technology is {technology}")
+    
+    # Get the correct technology data from our dictionary
+    tech_data = bess_technology_data.get(technology, bess_technology_data["LFP"])
+    
+    # Create a new params dictionary with the correct technology data
+    fixed_params = {
+        # Keep the original size parameters
+        "technology": technology,
+        "capacity": bess_params.get("capacity", 40),
+        "power_max": bess_params.get("power_max", 20),
+        
+        # Override with correct technology parameters
+        "sb_bos_cost_per_kwh": tech_data.get("sb_bos_cost_per_kwh", 0),
+        "pcs_cost_per_kw": tech_data.get("pcs_cost_per_kw", 0),
+        "epc_cost_per_kwh": tech_data.get("epc_cost_per_kwh", 0),
+        "sys_integration_cost_per_kwh": tech_data.get("sys_integration_cost_per_kwh", 0),
+        "rte_percent": tech_data.get("rte_percent", 0),
+        "insurance_percent_yr": tech_data.get("insurance_percent_yr", 0),
+        "disconnect_cost_per_kwh": tech_data.get("disconnect_cost_per_kwh", 0),
+        "recycling_cost_per_kwh": tech_data.get("recycling_cost_per_kwh", 0),
+        "cycle_life": tech_data.get("cycle_life", 0),
+        "dod_percent": tech_data.get("dod_percent", 0),
+        "calendar_life": tech_data.get("calendar_life", 0),
+    }
+    
+    # Handle the specific O&M field based on technology
+    if "om_cost_per_kwh_yr" in tech_data:
+        fixed_params["om_cost_per_kwh_yr"] = tech_data["om_cost_per_kwh_yr"]
+        fixed_params["fixed_om_per_kw_yr"] = None
+    else:
+        fixed_params["fixed_om_per_kw_yr"] = tech_data.get("fixed_om_per_kw_yr", 0)
+        fixed_params["om_cost_per_kwh_yr"] = None
+    
+    print(f"FIXED PARAMETERS: {fixed_params}")
+    return fixed_params
 
 # --- Financial Metrics Calculation Function ---
 # Needs significant modification to use new parameters
 def calculate_financial_metrics(bess_params, financial_params, eaf_params, annual_savings, incentives_results):
     """Calculate NPV, IRR, payback period, etc. using detailed BESS parameters."""
+    
+     # Force the correct technology parameters
+    bess_params = ensure_correct_technology_parameters(bess_params)
     
     # CRITICAL FIX: Ensure we're using the correct technology
     technology = bess_params.get("technology")
@@ -639,9 +687,13 @@ def calculate_financial_metrics(bess_params, financial_params, eaf_params, annua
 # --- Optimization Function (Needs update to pass base params correctly) ---
 def optimize_battery_size(eaf_params, utility_params, financial_params, incentive_params, bess_base_params):
     # Ensure technology is properly set and passed along
+    
     technology = bess_base_params.get("technology", "LFP")
     print(f"DEBUG OPTIMIZE: Using technology: {technology}")
     """Find optimal battery size (Capacity MWh, Power MW) for best ROI using NPV as metric"""
+     # Force the correct technology parameters in the base params
+    bess_base_params = ensure_correct_technology_parameters(bess_base_params)
+    
     capacity_options = np.linspace(5, 100, 10)
     power_options = np.linspace(2, 50, 10)
     best_npv = -float("inf"); best_capacity = None; best_power = None; best_metrics = None
