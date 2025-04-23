@@ -1296,23 +1296,19 @@ def update_bess_inputs_from_technology(selected_technology):
         tech_data.get("calendar_life", 0),
     )
 
-
-# --- MODIFIED BESS CALLBACK: Update BESS Store from All Inputs ---
+#Modified Bess callback
 @app.callback(
     Output("bess-params-store", "data"),
     [
-        # Overall Size
+        # Overall Size and Technology (these ALWAYS trigger updates)
         Input("bess-capacity", "value"),
         Input("bess-power", "value"),
-        # Technology Choice
         Input("bess-technology-dropdown", "value"),
-        # Detailed Inputs
+        # Other Inputs that always exist
         Input("bess-sb-bos-cost", "value"),
         Input("bess-pcs-cost", "value"),
         Input("bess-epc-cost", "value"),
         Input("bess-sys-int-cost", "value"),
-        Input("bess-fixed-om", "value"), # Note: ID depends on dynamic creation
-        Input("bess-om-cost-kwhyr", "value"), # Note: ID depends on dynamic creation
         Input("bess-rte", "value"),
         Input("bess-insurance", "value"),
         Input("bess-disconnect-cost", "value"),
@@ -1321,15 +1317,38 @@ def update_bess_inputs_from_technology(selected_technology):
         Input("bess-dod", "value"),
         Input("bess-calendar-life", "value"),
     ],
-    # prevent_initial_call=True # Allow initial load based on defaults
+    [
+        # Dynamic inputs as State (won't trigger callback but values will be read if component exists)
+        State("bess-fixed-om", "value"),
+        State("bess-om-cost-kwhyr", "value"),
+    ]
 )
 def update_bess_params_store(
     capacity, power, technology,
     sb_bos_cost, pcs_cost, epc_cost, sys_int_cost,
-    fixed_om, om_kwhyr, # One of these will likely be None depending on tech
     rte, insurance, disconnect_cost, recycling_cost,
-    cycle_life, dod, calendar_life
-    ):
+    cycle_life, dod, calendar_life,
+    # State values for dynamic fields (may be None)
+    fixed_om_state, om_kwhyr_state
+):
+    # Print statements for debugging
+    print(f"STORING TECHNOLOGY: {technology}")
+    print(f"Fixed O&M state: {fixed_om_state}, O&M kWh/yr state: {om_kwhyr_state}")
+    
+    # Determine which O&M value to use based on technology
+    if technology in bess_technology_data:
+        if "om_cost_per_kwh_yr" in bess_technology_data[technology]:
+            # Use kWh/yr value if present in the state, otherwise use default from tech data
+            om_kwhyr = om_kwhyr_state if om_kwhyr_state is not None else bess_technology_data[technology].get("om_cost_per_kwh_yr", 0)
+            fixed_om = None  # Not applicable for this technology
+        else:
+            # Use fixed O&M if present in the state, otherwise use default from tech data
+            fixed_om = fixed_om_state if fixed_om_state is not None else bess_technology_data[technology].get("fixed_om_per_kw_yr", 0)
+            om_kwhyr = None  # Not applicable for this technology
+    else:
+        # Fallback
+        fixed_om = fixed_om_state if fixed_om_state is not None else 0
+        om_kwhyr = om_kwhyr_state if om_kwhyr_state is not None else None
 
     # Build the dictionary for the store
     bess_store_data = {
@@ -1340,9 +1359,8 @@ def update_bess_params_store(
         "pcs_cost_per_kw": pcs_cost,
         "epc_cost_per_kwh": epc_cost,
         "sys_integration_cost_per_kwh": sys_int_cost,
-        # Store the O&M value that is not None
-        "fixed_om_per_kw_yr": fixed_om if fixed_om is not None else 0, # Default to 0 if None
-        "om_cost_per_kwh_yr": om_kwhyr if om_kwhyr is not None else None, # Keep as None if not applicable
+        "fixed_om_per_kw_yr": fixed_om,
+        "om_cost_per_kwh_yr": om_kwhyr,
         "rte_percent": rte,
         "insurance_percent_yr": insurance,
         "disconnect_cost_per_kwh": disconnect_cost,
@@ -1351,9 +1369,11 @@ def update_bess_params_store(
         "dod_percent": dod,
         "calendar_life": calendar_life,
     }
-    # Add back the example product for reference if needed, though not strictly necessary for calcs
+    
+    # Add example product for reference
     bess_store_data["example_product"] = bess_technology_data.get(technology, {}).get("example_product", "N/A")
-
+    
+    print(f"STORED PARAMS: {bess_store_data}")
     return bess_store_data
 
 
