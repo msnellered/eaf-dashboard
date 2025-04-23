@@ -778,7 +778,14 @@ def calculate_financial_metrics_advanced(bess_params, financial_params, eaf_para
             # Check thresholds *before* incrementing age for the year just completed
             if battery_age_years >= base_calendar_life: trigger_repl = True; print(f"DEBUG Yr {year}: Calendar life ({base_calendar_life} yrs) reached.")
             if cumulative_cycles >= base_cycle_life: trigger_repl = True; print(f"DEBUG Yr {year}: Cycle life ({base_cycle_life} cycles) reached ({cumulative_cycles:.0f}).")
-            if (current_capacity_mwh / base_capacity_mwh * 100.0) < repl_thresh_percent: trigger_repl = True; print(f"DEBUG Yr {year}: Capacity threshold ({repl_thresh_percent}%) reached ({current_capacity_mwh/base_capacity_mwh*100:.1f}%).")
+            if base_capacity_mwh > 0:
+                capacity_percentage = (current_capacity_mwh / base_capacity_mwh * 100.0)
+                if capacity_percentage < repl_thresh_percent: 
+                    trigger_repl = True
+                    print(f"DEBUG Yr {year}: Capacity threshold ({repl_thresh_percent}%) reached ({capacity_percentage:.1f}%).")
+                else:
+                    # Handle case where base capacity is zero or None
+                    trigger_repl = False
 
             if trigger_repl and not replacement_scheduled_this_year: # Avoid double counting if multiple triggers hit
                 inflated_replacement_cost = total_initial_cost * inflation_factor
