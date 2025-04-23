@@ -1548,58 +1548,79 @@ def update_bess_params_store(capacity, power, technology, sb_bos_cost, pcs_cost,
     """
     Updates the BESS parameter store. Always rebuilds the dictionary based on
     the selected technology template and then overwrites with current UI values
-    to ensure consistency.
+    to ensure consistency. Adds explicit None checks and type conversions.
     """
-    print(f"DEBUG: update_bess_params_store triggered. Tech: {technology}, Cap: {capacity}, Pow: {power}") # Optional debug print
+    triggered_id = ctx.triggered_id if ctx.triggered_id else "unknown"
+    print(f"--- DEBUG: update_bess_params_store triggered by {triggered_id} ---")
+    print(f"  Raw Inputs: Tech='{technology}', Cap={capacity}, Pow={power}, SB_BOS={sb_bos_cost}, PCS={pcs_cost}, ...") # Debug raw inputs
 
-    # Use selected technology, fallback to LFP if invalid
-    if not technology or technology not in bess_technology_data:
-        technology = "LFP"
-        print(f"DEBUG: Technology fallback to LFP.") # Optional debug print
+    try:
+        # Use selected technology, fallback to LFP if invalid
+        if not technology or technology not in bess_technology_data:
+            print(f"  WARN: Technology '{technology}' not found, falling back to LFP.")
+            technology = "LFP"
 
+        # Start with the defaults for the currently selected technology
+        default_tech_data = bess_technology_data.get(technology, bess_technology_data.get("LFP", {}))
+        store_data = default_tech_data.copy()
+        print(f"  Store initialized with defaults for: {technology}")
 
-    # Start with the defaults for the currently selected technology
-    # Use .get() with a fallback to handle potential missing keys robustly
-    # Ensure default_bess_params_store exists and is structured correctly
-    default_tech_data = bess_technology_data.get(technology, bess_technology_data.get("LFP", {}))
-    store_data = default_tech_data.copy()
+        # Helper to safely convert input to float, defaulting to 0.0 if None or error
+        def safe_float(value, default=0.0):
+            if value is None: return default
+            try: return float(value)
+            except (ValueError, TypeError): return default
 
-    # ALWAYS overwrite with the current values from ALL the input fields
-    # Use .get() on inputs too in case they are None initially, although defaults should handle this
-    store_data[KEY_CAPACITY] = capacity
-    store_data[KEY_POWER_MAX] = power
-    store_data[KEY_TECH] = technology # Ensure correct tech is stored
-    store_data[KEY_SB_BOS_COST] = sb_bos_cost
-    store_data[KEY_PCS_COST] = pcs_cost
-    store_data[KEY_EPC_COST] = epc_cost
-    store_data[KEY_SYS_INT_COST] = sys_int_cost
-    store_data[KEY_RTE] = rte
-    store_data[KEY_INSURANCE] = insurance
-    store_data[KEY_DISCONNECT_COST] = disconnect_cost
-    store_data[KEY_RECYCLING_COST] = recycling_cost
-    store_data[KEY_CYCLE_LIFE] = cycle_life
-    store_data[KEY_DOD] = dod
-    store_data[KEY_CALENDAR_LIFE] = calendar_life
+        # Helper to safely convert input to int, defaulting to 0 if None or error
+        def safe_int(value, default=0):
+            if value is None: return default
+            try: return int(float(value)) # Float first to handle "10.0" etc.
+            except (ValueError, TypeError): return default
 
-    # Handle the mutually exclusive O&M fields based on the selected technology's template structure
-    tech_template = bess_technology_data.get(technology, {}) # Get the template again for structure check
-    if KEY_OM_KWHR_YR in tech_template:
-        # If template expects $/kWh/yr, use that input value and remove the other key
-        store_data[KEY_OM_KWHR_YR] = om_kwhyr
-        store_data.pop(KEY_FIXED_OM, None)
-    elif KEY_FIXED_OM in tech_template:
-        # If template expects $/kW/yr, use that input value and remove the other key
-        store_data[KEY_FIXED_OM] = fixed_om
-        store_data.pop(KEY_OM_KWHR_YR, None)
-    else:
-        # Fallback if template structure is missing O&M keys (should not happen with current data)
-        # Default to using fixed_om if unclear from template
-        print(f"WARN: O&M structure unclear for tech '{technology}'. Defaulting to Fixed O&M.") # Optional warning
-        store_data[KEY_FIXED_OM] = fixed_om
-        store_data.pop(KEY_OM_KWHR_YR, None)
+        # ALWAYS overwrite with the current values from ALL the input fields, using safe conversions
+        store_data[KEY_CAPACITY] = safe_float(capacity, 0.0)
+        store_data[KEY_POWER_MAX] = safe_float(power, 0.0)
+        store_data[KEY_TECH] = technology # Ensure correct tech is stored
+        store_data[KEY_SB_BOS_COST] = safe_float(sb_bos_cost)
+        store_data[KEY_PCS_COST] = safe_float(pcs_cost)
+        store_data[KEY_EPC_COST] = safe_float(epc_cost)
+        store_data[KEY_SYS_INT_COST] = safe_float(sys_int_cost)
+        store_data[KEY_RTE] = safe_float(rte)
+        store_data[KEY_INSURANCE] = safe_float(insurance)
+        store_data[KEY_DISCONNECT_COST] = safe_float(disconnect_cost)
+        store_data[KEY_RECYCLING_COST] = safe_float(recycling_cost)
+        store_data[KEY_CYCLE_LIFE] = safe_int(cycle_life)
+        store_data[KEY_DOD] = safe_float(dod)
+        store_data[KEY_CALENDAR_LIFE] = safe_int(calendar_life)
 
-    # print(f"DEBUG: Updated STORE_BESS: {store_data}") # Optional debug print
-    return store_data
+        # Handle the mutually exclusive O&M fields based on the selected technology's template structure
+        tech_template = bess_technology_data.get(technology, {}) # Get the template again for structure check
+        if KEY_OM_KWHR_YR in tech_template:
+            store_data[KEY_OM_KWHR_YR] = safe_float(om_kwhyr)
+            store_data.pop(KEY_FIXED_OM, None)
+            print(f"  Using O&M Key: {KEY_OM_KWHR_YR}")
+        elif KEY_FIXED_OM in tech_template:
+            store_data[KEY_FIXED_OM] = safe_float(fixed_om)
+            store_data.pop(KEY_OM_KWHR_YR, None)
+            print(f"  Using O&M Key: {KEY_FIXED_OM}")
+        else:
+            # Fallback if template structure is missing O&M keys
+            print(f"  WARN: O&M structure unclear for tech '{technology}'. Defaulting to Fixed O&M.")
+            store_data[KEY_FIXED_OM] = safe_float(fixed_om)
+            store_data.pop(KEY_OM_KWHR_YR, None)
+
+        print(f"  SUCCESS: Prepared STORE_BESS data:")
+        # Use pprint for cleaner dictionary output
+        pprint.pprint(store_data, indent=2)
+        print(f"--- END DEBUG: update_bess_params_store ---")
+        return store_data
+
+    except Exception as e:
+        print(f"!!! ERROR in update_bess_params_store: {e} !!!")
+        traceback.print_exc()
+        print(f"--- END DEBUG: update_bess_params_store (with error) ---")
+        # Return no_update to prevent storing potentially corrupted data
+        return dash.no_update
 
 # --- Main Calculation Callback (Uses Advanced Metrics) ---
 @app.callback(
@@ -1614,6 +1635,11 @@ def update_bess_params_store(capacity, power, technology, sb_bos_cost, pcs_cost,
 )
 def display_advanced_calculation_results(n_clicks, eaf_params, bess_params, utility_params, financial_params, incentive_params, validation_errors):
     print(f"DEBUG: BESS params received for calculation: {bess_params}")
+    print(f"\n--- DEBUG: display_advanced_calculation_results ---")
+    print(f"  Button clicked. Received STORE_BESS state:")
+    pprint.pprint(bess_params, indent=2)
+    print(f"--- END DEBUG: display_advanced_calculation_results ---\n")
+    
     """Triggers ADVANCED calculations and displays results."""
     results_output = html.Div("Click 'Calculate Results' to generate the analysis.", className="text-center text-muted")
     stored_data = {}; error_output = ""; error_open = False
