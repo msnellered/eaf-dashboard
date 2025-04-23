@@ -1562,14 +1562,20 @@ def update_bess_inputs_from_technology(selected_technology):
         tech_data.get(KEY_CALENDAR_LIFE, 0),
     )
 
-# BESS Store Update
+# BESS Store Update (REVISED)
 @app.callback(
     Output(STORE_BESS, "data"),
     [
-        # Inputs that always exist and trigger updates
+        # Only Capacity, Power, and Technology Dropdown are Inputs now
         Input(ID_BESS_CAPACITY, "value"),
         Input(ID_BESS_POWER, "value"),
         Input(ID_BESS_TECH_DROPDOWN, "value"),
+        # Add the dynamic O&M inputs as Inputs IF they exist, otherwise they won't trigger
+        # This allows manual edits to O&M to be saved.
+        # We need to handle the case where one or the other doesn't exist in the layout yet.
+        Input(ID_BESS_FIXED_OM, "value"),      # Value from the $/kW/yr input
+        Input(ID_BESS_OM_KWHR_YR, "value"), # Value from the $/kWh/yr input
+        # Add other inputs IF you want manual edits to override defaults
         Input(ID_BESS_SB_BOS_COST, "value"),
         Input(ID_BESS_PCS_COST, "value"),
         Input(ID_BESS_EPC_COST, "value"),
@@ -1582,69 +1588,103 @@ def update_bess_inputs_from_technology(selected_technology):
         Input(ID_BESS_DOD, "value"),
         Input(ID_BESS_CALENDAR_LIFE, "value"),
     ],
-    [
-        # Dynamic inputs read as State (values read only if component exists)
-        State(ID_BESS_FIXED_OM, "value"),      # Value from the $/kW/yr input
-        State(ID_BESS_OM_KWHR_YR, "value"), # Value from the $/kWh/yr input
-    ]
+    # No States needed now, everything relevant is an Input
+    prevent_initial_call=True # Keep this
 )
 def update_bess_params_store(
     capacity, power, technology,
+    # Values from potentially dynamic O&M inputs
+    fixed_om_value, om_kwhyr_value,
+    # Values from other BESS parameter inputs
     sb_bos_cost, pcs_cost, epc_cost, sys_int_cost,
     rte, insurance, disconnect_cost, recycling_cost,
-    cycle_life, dod, calendar_life,
-    # State values for dynamic O&M fields (may be None if input doesn't exist)
-    fixed_om_state, om_kwhyr_state
+    cycle_life, dod, calendar_life
 ):
-    """Updates the BESS parameter store based on all current UI inputs."""
-    print(f"STORING TECHNOLOGY: {technology}")
-    print(f"Fixed O&M state: {fixed_om_state}, O&M kWh/yr state: {om_kwhyr_state}")
+    """
+    Updates the BESS parameter store.
+    If the trigger was the technology dropdown, it loads defaults for that tech.
+    If the trigger was a specific parameter input, it updates that parameter
+    while keeping the others consistent with the selected technology's defaults
+    or previous manual edits.
+    """
+    ctx = dash.callback_context
+    triggered_id = ctx.triggered_id if ctx.triggered_id else 'unknown'
 
-    # Base dictionary with common parameters
-    bess_store_data = {
-        KEY_TECH: technology,
-        KEY_CAPACITY: capacity,
-        KEY_POWER_MAX: power,
-        KEY_SB_BOS_COST: sb_bos_cost,
-        KEY_PCS_COST: pcs_cost,
-        KEY_EPC_COST: epc_cost,
-        KEY_SYS_INT_COST: sys_int_cost,
-        KEY_RTE: rte,
-        KEY_INSURANCE: insurance,
-        KEY_DISCONNECT_COST: disconnect_cost,
-        KEY_RECYCLING_COST: recycling_cost,
-        KEY_CYCLE_LIFE: cycle_life,
-        KEY_DOD: dod,
-        KEY_CALENDAR_LIFE: calendar_life,
-        # Initialize O&M keys to None
-        KEY_FIXED_OM: None,
-        KEY_OM_KWHR_YR: None,
-    }
+    # Determine the base parameters to use
+    # Default to LFP if technology is somehow invalid
+    if technology not in bess_technology_data:
+        technology = "LFP"
+        print(f"Warning: Invalid technology '{technology}' detected in store update. Defaulting to LFP.")
 
-    # Determine which O&M value to store based on the selected technology's structure
-    if technology in bess_technology_data:
-        tech_defaults = bess_technology_data[technology]
-        if KEY_OM_KWHR_YR in tech_defaults:
-            # This technology uses $/kWh/yr O&M
-            # Use the value from the state if available, otherwise use the default for this tech
-            bess_store_data[KEY_OM_KWHR_YR] = om_kwhyr_state if om_kwhyr_state is not None else tech_defaults.get(KEY_OM_KWHR_YR, 0)
-        else:
-            # This technology uses $/kW/yr O&M
-            # Use the value from the state if available, otherwise use the default for this tech
-            bess_store_data[KEY_FIXED_OM] = fixed_om_state if fixed_om_state is not None else tech_defaults.get(KEY_FIXED_OM, 0)
-    else:
-        # Fallback if technology is somehow invalid (shouldn't happen with dropdown)
-        # Store whatever value was present in the state, preferring fixed O&M if both somehow exist
-        if fixed_om_state is not None:
-            bess_store_data[KEY_FIXED_OM] = fixed_om_state
-        elif om_kwhyr_state is not None:
-             bess_store_data[KEY_OM_KWHR_YR] = om_kwhyr_state
-        print(f"Warning: Technology '{technology}' not found in bess_technology_data. Storing O&M based on available input states.")
+    tech_defaults = bess_technology_data[technology]
+    print(f"DEBUG update_bess_params_store: Triggered by {triggered_id}. Selected Tech: {technology}")
 
-    # Add example product for reference (optional)
-    bess_store_data[KEY_EXAMPLE_PRODUCT] = bess_technology_data.get(technology, {}).get(KEY_EXAMPLE_PRODUCT, "N/A")
+    # Start with the defaults for the selected technology
+    bess_store_data = tech_defaults.copy()
 
-    print("STORED PARAMS:")
+    # Always update the core identifiers and user-set size
+    bess_store_data[KEY_TECH] = technology
+    bess_store_data[KEY_CAPACITY] = capacity
+    bess_store_data[KEY_POWER_MAX] = power
+    bess_store_data[KEY_EXAMPLE_PRODUCT] = tech_defaults.get(KEY_EXAMPLE_PRODUCT, "N/A") # Ensure example product matches
+
+    # If the trigger was NOT the dropdown, update the specific field that changed.
+    # Otherwise (if dropdown triggered), we stick with the defaults loaded above.
+    if triggered_id != ID_BESS_TECH_DROPDOWN:
+        print(f"DEBUG: Non-dropdown trigger ({triggered_id}). Updating specific field.")
+        # Update the specific parameter that triggered the callback
+        # This allows manual overrides AFTER selecting a technology
+        if triggered_id == ID_BESS_SB_BOS_COST: bess_store_data[KEY_SB_BOS_COST] = sb_bos_cost
+        elif triggered_id == ID_BESS_PCS_COST: bess_store_data[KEY_PCS_COST] = pcs_cost
+        elif triggered_id == ID_BESS_EPC_COST: bess_store_data[KEY_EPC_COST] = epc_cost
+        elif triggered_id == ID_BESS_SYS_INT_COST: bess_store_data[KEY_SYS_INT_COST] = sys_int_cost
+        elif triggered_id == ID_BESS_RTE: bess_store_data[KEY_RTE] = rte
+        elif triggered_id == ID_BESS_INSURANCE: bess_store_data[KEY_INSURANCE] = insurance
+        elif triggered_id == ID_BESS_DISCONNECT_COST: bess_store_data[KEY_DISCONNECT_COST] = disconnect_cost
+        elif triggered_id == ID_BESS_RECYCLING_COST: bess_store_data[KEY_RECYCLING_COST] = recycling_cost
+        elif triggered_id == ID_BESS_CYCLE_LIFE: bess_store_data[KEY_CYCLE_LIFE] = cycle_life
+        elif triggered_id == ID_BESS_DOD: bess_store_data[KEY_DOD] = dod
+        elif triggered_id == ID_BESS_CALENDAR_LIFE: bess_store_data[KEY_CALENDAR_LIFE] = calendar_life
+        # Handle O&M based on which input triggered (if any)
+        elif triggered_id == ID_BESS_FIXED_OM:
+            # If fixed O&M changed, store it and clear the other type
+            bess_store_data[KEY_FIXED_OM] = fixed_om_value
+            bess_store_data[KEY_OM_KWHR_YR] = None # Ensure only one O&M type is active
+        elif triggered_id == ID_BESS_OM_KWHR_YR:
+             # If kWh/yr O&M changed, store it and clear the other type
+            bess_store_data[KEY_OM_KWHR_YR] = om_kwhyr_value
+            bess_store_data[KEY_FIXED_OM] = None # Ensure only one O&M type is active
+        # If capacity or power triggered, we don't need to do anything extra here,
+        # as they are already updated above.
+
+    # Ensure O&M structure is consistent with the selected technology *after* potential overrides
+    # If the dropdown *was* the trigger, tech_defaults already set the correct structure.
+    # If another input was the trigger, we might need to reset the O&M structure
+    # if the user manually edited an O&M field that isn't the primary one for the tech.
+    # However, the logic above already handles switching between the two O&M types if
+    # one of the O&M inputs itself was triggered. Let's refine the O&M part slightly
+    # to ensure consistency even if, say, cycle life was changed.
+
+    # Final O&M consistency check: Ensure the stored O&M matches the tech's expected type
+    # unless the user explicitly changed an O&M input.
+    if KEY_OM_KWHR_YR in tech_defaults:
+        # Tech expects $/kWh/yr. If fixed O&M has a value and wasn't the trigger, clear it.
+        if bess_store_data.get(KEY_FIXED_OM) is not None and triggered_id != ID_BESS_FIXED_OM:
+            bess_store_data[KEY_FIXED_OM] = None
+        # If the $/kWh/yr field is None (maybe cleared by user?), use the default.
+        if bess_store_data.get(KEY_OM_KWHR_YR) is None and triggered_id != ID_BESS_OM_KWHR_YR:
+             bess_store_data[KEY_OM_KWHR_YR] = tech_defaults.get(KEY_OM_KWHR_YR, 0)
+
+    else: # Tech expects $/kW/yr (fixed)
+        # Tech expects fixed $/kW/yr. If $/kWh/yr has a value and wasn't the trigger, clear it.
+        if bess_store_data.get(KEY_OM_KWHR_YR) is not None and triggered_id != ID_BESS_OM_KWHR_YR:
+            bess_store_data[KEY_OM_KWHR_YR] = None
+        # If the fixed O&M field is None, use the default.
+        if bess_store_data.get(KEY_FIXED_OM) is None and triggered_id != ID_BESS_FIXED_OM:
+            bess_store_data[KEY_FIXED_OM] = tech_defaults.get(KEY_FIXED_OM, 0)
+
+
+    print(f"FINAL Stored BESS Params (Tech: {technology}):")
     pprint.pprint(bess_store_data)
     return bess_store_data
 
