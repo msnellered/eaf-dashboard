@@ -1706,7 +1706,7 @@ def safe_calculate_financial_metrics(bess_params, financial_params, eaf_params, 
             "initial_om_cost_year1": 0
         }
   
- def safe_create_metrics_card(financial_metrics):
+def safe_create_metrics_card(financial_metrics):
     """Safely creates the financial metrics card."""
     try:
         def fmt_c(v): 
