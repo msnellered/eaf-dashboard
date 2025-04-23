@@ -868,7 +868,7 @@ app.layout = dbc.Container(fluid=True, className="bg-light min-vh-100 py-4", chi
 
         # Optimization Tab (keep as is)
         dbc.Tab(label="5. Battery Sizing Tool", tab_id="tab-optimization", children=[
-             dbc.Container(py=4, children=[
+             dbc.Container(children=[
                 dcc.Loading(id="loading-optimization", type="circle", children=[html.Div(id="optimization-output-container", className="mt-4")])
              ])
         ]), # End Tab 5
