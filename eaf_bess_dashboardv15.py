@@ -648,8 +648,8 @@ def calculate_financial_metrics_advanced(bess_params, financial_params, eaf_para
 
         # BESS Base Params
         try:
-            base_capacity_mwh = 0.0 if bess_params.get(KEY_CAPACITY) is None else float(bess_params.get(KEY_CAPACITY, 0))
-            base_power_mw = 0.0 if bess_params.get(KEY_POWER_MAX) is None else float(bess_params.get(KEY_POWER_MAX, 0))
+            base_capacity_mwh = max(0.001, safe_float(bess_params.get(KEY_CAPACITY, 0)))
+            base_power_mw = max(0.001, safe_float(bess_params.get(KEY_POWER_MAX, 0)))
             base_rte_percent = 0.0 if bess_params.get(KEY_RTE) is None else float(bess_params.get(KEY_RTE, 0))
         except Exception as e: print(f"Error converting BESS base params: {e}"); return {} # Early exit on critical error
         base_capacity_mwh = max(0.0, base_capacity_mwh)
@@ -1135,7 +1135,7 @@ app.layout = dbc.Container(fluid=True, className="bg-light min-vh-100 py-4", chi
                     dbc.AccordionItem(title="BESS Parameters", children=[
                         dbc.Card(className="p-3", children=[
                             dbc.Row([
-                                dbc.Col(create_bess_input_group("Total Energy Capacity:", ID_BESS_CAPACITY, default_bess_params_store[KEY_CAPACITY], "MWh", min_val=0.1, tooltip_text="Total energy the BESS can store."), md=6),
+                                dbc.Col(create_bess_input_group("Total Energy Capacity:", ID_BESS_CAPACITY, default_bess_params_store[KEY_CAPACITY], "MWh", tooltip_text="Total energy the BESS can store."), md=6),
                                 dbc.Col(create_bess_input_group("Total Power Rating:", ID_BESS_POWER, default_bess_params_store[KEY_POWER_MAX], "MW", min_val=0.1, tooltip_text="Maximum rate of charge/discharge."), md=6),
                             ]),
                             html.Div(id=ID_BESS_C_RATE_DISPLAY, className="mt-1 mb-3 text-muted small text-center"),
@@ -1490,7 +1490,7 @@ def validate_inputs_advanced(calc_clicks, opt_clicks, utility_params, eaf_params
         if dep_p.get(KEY_MACRS_SCHEDULE) not in MACRS_TABLES: errors.append("Invalid MACRS Schedule selected.")
         # Degradation
         deg_p = fin_params.get(KEY_DEGRAD_PARAMS, {})
-        if deg_p.get(KEY_DEGRAD_CAP_YR, -1) < 0: errors.append("Capacity Degradation Rate cannot be negative.")
+        
         if deg_p.get(KEY_DEGRAD_RTE_YR, -1) < 0: errors.append("RTE Degradation Rate cannot be negative.")
         if not (0 < deg_p.get(KEY_REPL_THRESH, -1) <= 100): errors.append("Replacement Threshold must be between 0% and 100%.")
 
