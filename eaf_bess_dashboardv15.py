@@ -366,13 +366,27 @@ def calculate_initial_bess_cost(bess_params):
     sys_int_cost = bess_params.get(KEY_SYS_INT_COST, 0) * capacity_kwh
     return sb_bos_cost + pcs_cost + epc_cost + sys_int_cost
 
-def create_bess_input_group(label, input_id, value, unit, tooltip_text=None, type="number", step=None, min_val=0, style=None):
+def create_bess_input_group(label, input_id, value, unit, tooltip_text=None, type="number", step=None, min_val=0, max_val=None, style=None):
     label_content = [label]
     if tooltip_text:
         tooltip_id = f"{input_id}-tooltip"
         label_content.extend([" ", html.I(className="fas fa-info-circle", id=tooltip_id, style={"cursor": "pointer", "color": "#6c757d"}), dbc.Tooltip(tooltip_text, target=tooltip_id, placement="right")])
     row_style = style if style is not None else {}
-    return dbc.Row([ dbc.Label(label_content, html_for=input_id, width=6), dbc.Col(dcc.Input(id=input_id, type=type, value=value, className="form-control form-control-sm", step=step, min=min_val), width=4), dbc.Col(html.Span(unit, className="input-group-text input-group-text-sm"), width=2), ], className="mb-2 align-items-center", style=row_style)
+    input_props = {
+        "id": input_id,
+        "type": type,
+        "value": value,
+        "className": "form-control form-control-sm",
+        "step": step,
+        "min": min_val
+    }
+    if max_val is not None:
+        input_props["max"] = max_val
+    return dbc.Row([
+        dbc.Label(label_content, html_for=input_id, width=6),
+        dbc.Col(dcc.Input(**input_props), width=4),
+        dbc.Col(html.Span(unit, className="input-group-text input-group-text-sm"), width=2),
+    ], className="mb-2 align-items-center", style=row_style)
 
 # --- New Helper Functions ---
 def calculate_macrs_depreciation(depreciable_basis, schedule_name, year):
@@ -405,6 +419,122 @@ def calculate_debt_payment(loan_amount, annual_interest_rate, loan_term_years):
     # A proper amortization schedule is needed for accuracy.
     # Let's just return the payment for now, and handle interest/principal inside the main loop.
     return annual_payment
+
+def create_monthly_bill_without_bess(eaf_params, utility_params, days_in_month, month):
+    """
+    Calculate the monthly electricity bill without BESS.
+    
+    Args:
+        eaf_params: Dictionary of EAF parameters
+        utility_params: Dictionary of utility rate parameters
+        days_in_month: Number of days in the month
+        month: Month number (1-12)
+        
+    Returns:
+        Dictionary with billing components including 'total_bill'
+    """
+    # Get parameters
+    grid_cap = eaf_params.get(KEY_GRID_CAP, 0)
+    eaf_size = eaf_params.get(KEY_EAF_SIZE, 0)
+    cycle_duration = eaf_params.get(KEY_CYCLE_DURATION, 36)
+    cycles_per_day = eaf_params.get(KEY_CYCLES_PER_DAY, 24)
+    days_active = min(days_in_month, eaf_params.get(KEY_DAYS_PER_YEAR, 300) / 12)
+    
+    # Get seasonal multiplier if applicable
+    seasonal_multiplier = get_month_season_multiplier(month, utility_params)
+    
+    # Simulate one cycle to get peak demand
+    time_minutes = np.linspace(0, cycle_duration, 200)
+    eaf_power = calculate_eaf_profile(time_minutes, eaf_size, cycle_duration)
+    peak_demand = np.max(eaf_power) if len(eaf_power) > 0 else 0
+    
+    # Calculate energy consumption and charges
+    energy_per_cycle_mwh = np.sum(eaf_power) * (cycle_duration / 60) / 1000 if len(eaf_power) > 0 else 0
+    total_energy_mwh = energy_per_cycle_mwh * cycles_per_day * days_active
+    
+    # Apply TOU periods if applicable (simplified)
+    # Assuming all energy is charged at peak rate for simplicity
+    energy_rates = utility_params.get(KEY_ENERGY_RATES, {})
+    peak_rate = energy_rates.get("peak", 0) * seasonal_multiplier
+    energy_charge = total_energy_mwh * peak_rate
+    
+    # Demand charge
+    demand_charge = peak_demand * utility_params.get(KEY_DEMAND_CHARGE, 0) * seasonal_multiplier
+    
+    # Total bill
+    total_bill = energy_charge + demand_charge
+    
+    return {
+        "total_bill": total_bill,
+        "energy_charge": energy_charge,
+        "demand_charge": demand_charge,
+        "peak_demand_mw": peak_demand,
+        "total_energy_mwh": total_energy_mwh
+    }
+
+def create_monthly_bill_with_bess(eaf_params, bess_params, utility_params, days_in_month, month):
+    """
+    Calculate the monthly electricity bill with BESS.
+    
+    Args:
+        eaf_params: Dictionary of EAF parameters
+        bess_params: Dictionary of BESS parameters (potentially degraded)
+        utility_params: Dictionary of utility rate parameters
+        days_in_month: Number of days in the month
+        month: Month number (1-12)
+        
+    Returns:
+        Dictionary with billing components including 'total_bill' and 'bess_discharged_total_mwh'
+    """
+    # Get parameters
+    grid_cap = eaf_params.get(KEY_GRID_CAP, 0)
+    eaf_size = eaf_params.get(KEY_EAF_SIZE, 0)
+    cycle_duration = eaf_params.get(KEY_CYCLE_DURATION, 36)
+    cycles_per_day = eaf_params.get(KEY_CYCLES_PER_DAY, 24)
+    days_active = min(days_in_month, eaf_params.get(KEY_DAYS_PER_YEAR, 300) / 12)
+    
+    # Get BESS power limits
+    bess_power_max = bess_params.get(KEY_POWER_MAX, 0)
+    
+    # Get seasonal multiplier if applicable
+    seasonal_multiplier = get_month_season_multiplier(month, utility_params)
+    
+    # Simulate one cycle to get modified demand
+    time_minutes = np.linspace(0, cycle_duration, 200)
+    eaf_power = calculate_eaf_profile(time_minutes, eaf_size, cycle_duration)
+    grid_power, bess_power = calculate_grid_bess_power(eaf_power, grid_cap, bess_power_max)
+    
+    # Calculate peak demand after BESS
+    peak_demand = np.max(grid_power) if len(grid_power) > 0 else 0
+    
+    # Calculate BESS discharge
+    bess_discharged_mwh = np.sum(bess_power) * (cycle_duration / 60) / 1000 if len(bess_power) > 0 else 0
+    bess_discharged_total_mwh = bess_discharged_mwh * cycles_per_day * days_active
+    
+    # Calculate grid energy consumption and charges
+    grid_energy_per_cycle_mwh = np.sum(grid_power) * (cycle_duration / 60) / 1000 if len(grid_power) > 0 else 0
+    total_grid_energy_mwh = grid_energy_per_cycle_mwh * cycles_per_day * days_active
+    
+    # Apply TOU periods if applicable (simplified)
+    # Assuming all energy is charged at peak rate for simplicity
+    energy_rates = utility_params.get(KEY_ENERGY_RATES, {})
+    peak_rate = energy_rates.get("peak", 0) * seasonal_multiplier
+    energy_charge = total_grid_energy_mwh * peak_rate
+    
+    # Demand charge
+    demand_charge = peak_demand * utility_params.get(KEY_DEMAND_CHARGE, 0) * seasonal_multiplier
+    
+    # Total bill
+    total_bill = energy_charge + demand_charge
+    
+    return {
+        "total_bill": total_bill,
+        "energy_charge": energy_charge,
+        "demand_charge": demand_charge,
+        "peak_demand_mw": peak_demand,
+        "total_grid_energy_mwh": total_grid_energy_mwh,
+        "bess_discharged_total_mwh": bess_discharged_total_mwh
+    }
 
 # --- Billing Calculation (Modified for Degradation & Charging) ---
 def calculate_yearly_savings_discharge(eaf_params, bess_params_yr_t, utility_params, year_t):
@@ -498,6 +628,13 @@ def calculate_incentives(bess_params, incentive_params):
     return {"total_incentive": total_incentive, "breakdown": incentive_breakdown, "calculated_initial_cost": total_cost}
 
 
+def fmt_c(v, decimals=0):
+    """Format a currency value with commas and specified decimal places."""
+    if pd.notna(v) and isinstance(v, (int, float)) and abs(v) < 1e15:
+        return f"${v:,.{decimals}f}"
+    else:
+        return "N/A"
+
 # --- Financial Metrics Calculation (HEAVILY REVISED) ---
 def calculate_financial_metrics_advanced(bess_params, financial_params, eaf_params, utility_params, incentive_results):
     """
@@ -563,7 +700,7 @@ def calculate_financial_metrics_advanced(bess_params, financial_params, eaf_para
 
         # --- Initial Calculations ---
         total_initial_cost = calculate_initial_bess_cost(bess_params)
-        total_incentive = incentives_results.get("total_incentive", 0.0)
+        total_incentive = incentive_results.get("total_incentive", 0.0)
 
         # Depreciable Basis (Simplified: Initial Cost - 50% of ITC if taken)
         # Note: Real tax rules are complex. Consult a tax professional.
@@ -1551,6 +1688,7 @@ def display_advanced_calculation_results(n_clicks, eaf_params, bess_params, util
             )
 
         # --- Graphs (Updated for Project & Equity CF) ---
+        years = len(years_cf) - 1  # Subtract 1 since years_cf includes year 0
         years_cf = list(range(int(financial_params.get(KEY_LIFESPAN, 30)) + 1))
         project_cf_data = financial_metrics.get("project_cash_flows", [])
         equity_cf_data = financial_metrics.get("equity_cash_flows", [])
