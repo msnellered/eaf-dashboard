@@ -70,8 +70,7 @@ except ImportError:
 
 # --- Constants ---
 # ... (Most Store and Component IDs remain the same) ...
-# --- Constants ---
-# ... (Most Store and Component IDs remain the same) ...
+
 
 # Store IDs
 STORE_EAF = "eaf-store"
@@ -205,6 +204,30 @@ KEY_MACRS_SCHEDULE = "macrs_schedule"
 KEY_DEGRAD_CAP_YR = "degradation_capacity_percent_yr"
 KEY_DEGRAD_RTE_YR = "degradation_rte_percent_yr"
 KEY_REPL_THRESH = "replacement_threshold_percent"
+
+# Add this after your constants definitions
+def get_default_bess_params():
+    """Return a complete set of default BESS parameters with all required fields."""
+    return {
+        KEY_TECH: "LFP",
+        KEY_CAPACITY: 0.001,  # Small positive value instead of 0
+        KEY_POWER_MAX: 0.001,  # Small positive value instead of 0
+        KEY_EXAMPLE_PRODUCT: "Tesla Megapack 2XL (Illustrative)",
+        KEY_SB_BOS_COST: 210, 
+        KEY_PCS_COST: 75,
+        KEY_EPC_COST: 56,
+        KEY_SYS_INT_COST: 42,
+        KEY_FIXED_OM: 5,     # Make sure this is always included
+        KEY_OM_KWHR_YR: 0,   # Include both O&M parameters
+        KEY_RTE: 86,
+        KEY_INSURANCE: 0.5,
+        KEY_DISCONNECT_COST: 2,
+        KEY_RECYCLING_COST: 1,
+        KEY_CYCLE_LIFE: 4000,
+        KEY_DOD: 95,
+        KEY_CALENDAR_LIFE: 16,
+    }
+
 # New IDs
 ID_PARAM_ACCORDION = "parameter-accordion"
 ID_DEBT_PARAMS_CARD = "debt-params-card"
@@ -646,17 +669,25 @@ def calculate_financial_metrics_advanced(bess_params, financial_params, eaf_para
         technology = bess_params.get(KEY_TECH, "LFP")
         print(f"\n--- DEBUG calculate_financial_metrics_advanced --- Tech: {technology}")
 
-        # BESS Base Params
+       # Replace the try/except block in calculate_financial_metrics_advanced (lines 673-682)
         try:
-            base_capacity_mwh = max(0.001, safe_float(bess_params.get(KEY_CAPACITY, 0)))
-            base_power_mw = max(0.001, safe_float(bess_params.get(KEY_POWER_MAX, 0)))
-            base_rte_percent = 0.0 if bess_params.get(KEY_RTE) is None else float(bess_params.get(KEY_RTE, 0))
-        except Exception as e: print(f"Error converting BESS base params: {e}"); return {} # Early exit on critical error
-        base_capacity_mwh = max(0.0, base_capacity_mwh)
-        base_power_mw = max(0.0, base_power_mw)
-        base_rte_percent = max(0.0, base_rte_percent)
-        base_capacity_kwh = base_capacity_mwh * 1000.0
-        base_power_kw = base_power_mw * 1000.0
+            # Define safe_float locally to avoid dependency on external definition
+            def local_safe_float(value, default=0.0):
+                if value is None: return default
+                try: return float(value)
+                except (ValueError, TypeError): return default
+                
+            base_capacity_mwh = max(0.001, local_safe_float(bess_params.get(KEY_CAPACITY, 0.001)))
+            base_power_mw = max(0.001, local_safe_float(bess_params.get(KEY_POWER_MAX, 0.001)))
+            base_rte_percent = max(1.0, local_safe_float(bess_params.get(KEY_RTE, 86.0)))
+        except Exception as e: 
+            print(f"Error converting BESS base params: {e}")
+            # Use defaults instead of failing
+            base_capacity_mwh = 0.001
+            base_power_mw = 0.001
+            base_rte_percent = 86.0
+            base_capacity_kwh = base_capacity_mwh * 1000.0
+            base_power_kw = base_power_mw * 1000.0
 
         # Financial Base Params
         years = int(financial_params.get(KEY_LIFESPAN, 30))
@@ -1577,21 +1608,21 @@ def update_bess_params_store(capacity, power, technology, sb_bos_cost, pcs_cost,
             try: return int(float(value)) # Float first to handle "10.0" etc.
             except (ValueError, TypeError): return default
 
-        # ALWAYS overwrite with the current values from ALL the input fields, using safe conversions
-        store_data[KEY_CAPACITY] = safe_float(capacity, 0.0)
-        store_data[KEY_POWER_MAX] = safe_float(power, 0.0)
-        store_data[KEY_TECH] = technology # Ensure correct tech is stored
-        store_data[KEY_SB_BOS_COST] = safe_float(sb_bos_cost)
-        store_data[KEY_PCS_COST] = safe_float(pcs_cost)
-        store_data[KEY_EPC_COST] = safe_float(epc_cost)
-        store_data[KEY_SYS_INT_COST] = safe_float(sys_int_cost)
-        store_data[KEY_RTE] = safe_float(rte)
-        store_data[KEY_INSURANCE] = safe_float(insurance)
-        store_data[KEY_DISCONNECT_COST] = safe_float(disconnect_cost)
-        store_data[KEY_RECYCLING_COST] = safe_float(recycling_cost)
-        store_data[KEY_CYCLE_LIFE] = safe_int(cycle_life)
-        store_data[KEY_DOD] = safe_float(dod)
-        store_data[KEY_CALENDAR_LIFE] = safe_int(calendar_life)
+        # Update with actual UI values (these will override defaults)
+        store_data[KEY_CAPACITY] = safe_float(capacity, 0.001)  # Use small positive default
+        store_data[KEY_POWER_MAX] = safe_float(power, 0.001)  # Use small positive default
+        store_data[KEY_TECH] = technology if technology and technology in bess_technology_data else "LFP"
+        store_data[KEY_SB_BOS_COST] = safe_float(sb_bos_cost, store_data.get(KEY_SB_BOS_COST, 0))
+        store_data[KEY_PCS_COST] = safe_float(pcs_cost, store_data.get(KEY_PCS_COST, 0))
+        store_data[KEY_EPC_COST] = safe_float(epc_cost, store_data.get(KEY_EPC_COST, 0))
+        store_data[KEY_SYS_INT_COST] = safe_float(sys_int_cost, store_data.get(KEY_SYS_INT_COST, 0))
+        store_data[KEY_RTE] = safe_float(rte, store_data.get(KEY_RTE, 0))
+        store_data[KEY_INSURANCE] = safe_float(insurance, store_data.get(KEY_INSURANCE, 0))
+        store_data[KEY_DISCONNECT_COST] = safe_float(disconnect_cost, store_data.get(KEY_DISCONNECT_COST, 0))
+        store_data[KEY_RECYCLING_COST] = safe_float(recycling_cost, store_data.get(KEY_RECYCLING_COST, 0))
+        store_data[KEY_CYCLE_LIFE] = safe_int(cycle_life, store_data.get(KEY_CYCLE_LIFE, 1000))
+        store_data[KEY_DOD] = safe_float(dod, store_data.get(KEY_DOD, 0))
+        store_data[KEY_CALENDAR_LIFE] = safe_int(calendar_life, store_data.get(KEY_CALENDAR_LIFE, 10))
 
         # Handle the mutually exclusive O&M fields based on the selected technology's template structure
         tech_template = bess_technology_data.get(technology, {}) # Get the template again for structure check
@@ -1600,8 +1631,8 @@ def update_bess_params_store(capacity, power, technology, sb_bos_cost, pcs_cost,
             store_data.pop(KEY_FIXED_OM, None)
             print(f"  Using O&M Key: {KEY_OM_KWHR_YR}")
         elif KEY_FIXED_OM in tech_template:
-            store_data[KEY_FIXED_OM] = safe_float(fixed_om)
-            store_data.pop(KEY_OM_KWHR_YR, None)
+            store_data[KEY_FIXED_OM] = safe_float(fixed_om, store_data.get(KEY_FIXED_OM, 0))
+            store_data[KEY_OM_KWHR_YR] = safe_float(om_kwhyr, store_data.get(KEY_OM_KWHR_YR, 0))
             print(f"  Using O&M Key: {KEY_FIXED_OM}")
         else:
             # Fallback if template structure is missing O&M keys
@@ -1682,31 +1713,35 @@ def display_advanced_calculation_results(n_clicks, eaf_params, # REMOVED bess_pa
         try: return int(float(value))
         except (ValueError, TypeError): return default
 
-    # Rebuild the dictionary using the UI values as the primary source
-    bess_params = {}
-    bess_params[KEY_CAPACITY] = safe_float(ui_capacity, 0.0)
-    bess_params[KEY_POWER_MAX] = safe_float(ui_power, 0.0)
-    bess_params[KEY_TECH] = ui_technology if ui_technology and ui_technology in bess_technology_data else "LFP" # Validate tech
-    bess_params[KEY_SB_BOS_COST] = safe_float(ui_sb_bos_cost)
-    bess_params[KEY_PCS_COST] = safe_float(ui_pcs_cost)
-    bess_params[KEY_EPC_COST] = safe_float(ui_epc_cost)
-    bess_params[KEY_SYS_INT_COST] = safe_float(ui_sys_int_cost)
-    bess_params[KEY_RTE] = safe_float(ui_rte)
-    bess_params[KEY_INSURANCE] = safe_float(ui_insurance)
-    bess_params[KEY_DISCONNECT_COST] = safe_float(ui_disconnect_cost)
-    bess_params[KEY_RECYCLING_COST] = safe_float(ui_recycling_cost)
-    bess_params[KEY_CYCLE_LIFE] = safe_int(ui_cycle_life)
-    bess_params[KEY_DOD] = safe_float(ui_dod)
-    bess_params[KEY_CALENDAR_LIFE] = safe_int(ui_calendar_life)
+    # Start with complete defaults
+    bess_params = get_default_bess_params()
 
-    # Handle O&M based on the selected technology template
+    # Update with UI values
+    bess_params[KEY_CAPACITY] = safe_float(ui_capacity, 0.001)  # Use small positive default
+    bess_params[KEY_POWER_MAX] = safe_float(ui_power, 0.001)    # Use small positive default
+    bess_params[KEY_TECH] = ui_technology if ui_technology and ui_technology in bess_technology_data else "LFP"
+
+    # Update with technology template values first
     tech_template = bess_technology_data.get(bess_params[KEY_TECH], {})
-    if KEY_OM_KWHR_YR in tech_template:
-        bess_params[KEY_OM_KWHR_YR] = safe_float(ui_om_kwhyr)
-    elif KEY_FIXED_OM in tech_template:
-        bess_params[KEY_FIXED_OM] = safe_float(ui_fixed_om)
-    else: # Fallback
-        bess_params[KEY_FIXED_OM] = safe_float(ui_fixed_om)
+    for key, value in tech_template.items():
+        bess_params[key] = value
+
+    # Override with specific UI values
+    bess_params[KEY_SB_BOS_COST] = safe_float(ui_sb_bos_cost, bess_params.get(KEY_SB_BOS_COST, 0))
+    bess_params[KEY_PCS_COST] = safe_float(ui_pcs_cost, bess_params.get(KEY_PCS_COST, 0))
+    bess_params[KEY_EPC_COST] = safe_float(ui_epc_cost, bess_params.get(KEY_EPC_COST, 0))
+    bess_params[KEY_SYS_INT_COST] = safe_float(ui_sys_int_cost, bess_params.get(KEY_SYS_INT_COST, 0))
+    bess_params[KEY_RTE] = safe_float(ui_rte, bess_params.get(KEY_RTE, 0))
+    bess_params[KEY_INSURANCE] = safe_float(ui_insurance, bess_params.get(KEY_INSURANCE, 0))
+    bess_params[KEY_DISCONNECT_COST] = safe_float(ui_disconnect_cost, bess_params.get(KEY_DISCONNECT_COST, 0))
+    bess_params[KEY_RECYCLING_COST] = safe_float(ui_recycling_cost, bess_params.get(KEY_RECYCLING_COST, 0))
+    bess_params[KEY_CYCLE_LIFE] = safe_int(ui_cycle_life, bess_params.get(KEY_CYCLE_LIFE, 1000))
+    bess_params[KEY_DOD] = safe_float(ui_dod, bess_params.get(KEY_DOD, 100))
+    bess_params[KEY_CALENDAR_LIFE] = safe_int(ui_calendar_life, bess_params.get(KEY_CALENDAR_LIFE, 10))
+
+    # CRITICAL FIX: Always include both O&M values
+    bess_params[KEY_FIXED_OM] = safe_float(ui_fixed_om, bess_params.get(KEY_FIXED_OM, 0))
+    bess_params[KEY_OM_KWHR_YR] = safe_float(ui_om_kwhyr, bess_params.get(KEY_OM_KWHR_YR, 0))
 
     # Add missing keys from the technology template (like example_product)
     # This ensures the dict passed to calculation is complete
