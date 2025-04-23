@@ -679,6 +679,71 @@ def optimize_battery_size(
 
 
 # --- Application Layout ---
+def create_technology_comparison_table(current_tech, capacity_mwh, power_mw):
+    """Create a comparison table of different battery technologies."""
+    # Define the formatting function inside this scope
+    def fmt_c(v): return f"${v:,.0f}" if pd.notna(v) else "N/A"
+    
+    # Technologies to compare (can be expanded)
+    techs_to_compare = ['LFP', 'NMC', 'Redox Flow (Vanadium)', 'Sodium-Ion', 'Iron-Air']
+    
+    # Ensure current tech is in the list
+    if current_tech not in techs_to_compare:
+        techs_to_compare.append(current_tech)
+    
+    comp_data = []
+    capacity_kwh = capacity_mwh * 1000
+    power_kw = power_mw * 1000
+    
+    for tech in techs_to_compare:
+        if tech not in bess_technology_data:
+            continue
+            
+        tech_data = bess_technology_data[tech]
+        
+        # Calculate capital cost components
+        sb_bos_cost = tech_data.get('sb_bos_cost_per_kwh', 0) * capacity_kwh
+        pcs_cost = tech_data.get('pcs_cost_per_kw', 0) * power_kw
+        epc_cost = tech_data.get('epc_cost_per_kwh', 0) * capacity_kwh
+        sys_int_cost = tech_data.get('sys_integration_cost_per_kwh', 0) * capacity_kwh
+        total_cost = sb_bos_cost + pcs_cost + epc_cost + sys_int_cost
+        
+        # Calculate annual O&M cost
+        if 'om_cost_per_kwh_yr' in tech_data:
+            annual_om = tech_data['om_cost_per_kwh_yr'] * capacity_kwh
+        else:
+            annual_om = tech_data.get('fixed_om_per_kw_yr', 0) * power_kw
+        
+        # Calculate effective life
+        cycle_life = tech_data.get('cycle_life', 5000)
+        calendar_life = tech_data.get('calendar_life', 15)
+        
+        row = {
+            'Technology': tech + (' (Current)' if tech == current_tech else ''),
+            'Cycle Life': f"{cycle_life:,}",
+            'Calendar Life (yrs)': f"{calendar_life:.1f}",
+            'RTE (%)': f"{tech_data.get('rte_percent', 0):.1f}",
+            'Capital Cost': fmt_c(total_cost),
+            'Annual O&M': fmt_c(annual_om),
+            '$/kWh': f"${tech_data.get('sb_bos_cost_per_kwh', 0) + tech_data.get('epc_cost_per_kwh', 0) + tech_data.get('sys_integration_cost_per_kwh', 0):.0f}",
+            '$/kW': f"${tech_data.get('pcs_cost_per_kw', 0):.0f}"
+        }
+        comp_data.append(row)
+    
+    # Create the table
+    comparison_table = dash_table.DataTable(
+        data=comp_data,
+        columns=[{"name": i, "id": i} for i in comp_data[0].keys() if comp_data],
+        style_cell={'textAlign': 'center', 'padding': '5px'},
+        style_header={'fontWeight': 'bold', 'backgroundColor': '#f0f0f0'},
+        style_cell_conditional=[
+            {'if': {'column_id': 'Technology'}, 'textAlign': 'left', 'fontWeight': 'bold'},
+            {'if': {'filter_query': '{Technology} contains "Current"'}, 'backgroundColor': '#e6f7ff'}
+        ],
+        style_table={'overflowX': 'auto'}
+    )
+    
+    return comparison_table
 # Helper function to create input groups for BESS parameters
 def create_bess_input_group(label, input_id, value, unit, type="number", step=None, min_val=0):
     return dbc.Row(
