@@ -309,13 +309,25 @@ def calculate_eaf_profile(time_minutes, eaf_size=100, cycle_duration=36):
 def calculate_grid_bess_power(eaf_power, grid_cap, bess_power_max):
     """Calculates grid and BESS power contributions based on EAF demand and limits."""
     grid_power = np.zeros_like(eaf_power); bess_power = np.zeros_like(eaf_power)
-    grid_cap = max(0, grid_cap); bess_power_max = max(0, bess_power_max) # Ensure non-negative
+
+    # --- ADDED: Handle NoneType for inputs ---
+    # Provide default numeric values if None is passed
+    grid_cap_val = grid_cap if grid_cap is not None else 0
+    bess_power_max_val = bess_power_max if bess_power_max is not None else 0
+    # --- End Add ---
+
+    # Ensure non-negative using the validated values
+    grid_cap_val = max(0, grid_cap_val)
+    bess_power_max_val = max(0, bess_power_max_val)
+
     for i, p_eaf in enumerate(eaf_power):
         p_eaf = max(0, p_eaf) # Ensure non-negative EAF power
-        if p_eaf > grid_cap:
+        # Use the validated grid_cap_val here
+        if p_eaf > grid_cap_val:
             # Peak shaving: BESS discharges to cover the excess demand
-            discharge_needed = p_eaf - grid_cap
-            actual_discharge = min(discharge_needed, bess_power_max) # Limited by BESS power
+            discharge_needed = p_eaf - grid_cap_val
+            # Use the validated bess_power_max_val here
+            actual_discharge = min(discharge_needed, bess_power_max_val) # Limited by BESS power
             bess_power[i] = actual_discharge # Positive value indicates discharge
             grid_power[i] = p_eaf - actual_discharge # Grid supplies up to its cap + remaining EAF need
         else:
@@ -419,8 +431,13 @@ def calculate_annual_billings(eaf_params, bess_params, utility_params):
 # --- Refactored Cost Calculation Helper ---
 def calculate_initial_bess_cost(bess_params):
     """Calculates the initial gross capital cost of the BESS."""
+    # --- ADDED: Handle NoneType for capacity/power ---
     capacity_mwh = bess_params.get(KEY_CAPACITY, 0)
     power_mw = bess_params.get(KEY_POWER_MAX, 0)
+    capacity_mwh = capacity_mwh if capacity_mwh is not None else 0
+    power_mw = power_mw if power_mw is not None else 0
+    # --- End Add ---
+
     capacity_kwh = capacity_mwh * 1000
     power_kw = power_mw * 1000
 
@@ -508,46 +525,64 @@ def calculate_financial_metrics(bess_params, financial_params, eaf_params, annua
     pprint.pprint(bess_params)
     print("----------------------------------------\n")
     # --- END DEBUG PRINT ---
-    # REMOVED call to ensure_correct_technology_parameters
-    # REMOVED global variable usage
-    # ... (rest of the function remains the same)
 
     # --- Get Parameters ---
-    # BESS Parameters from store (using .get for robustness)
-    technology = bess_params.get(KEY_TECH, "LFP") # Get tech directly from params
+    technology = bess_params.get(KEY_TECH, "LFP")
     print(f"DEBUG FINANCE: Using technology: {technology}")
     print(f"DEBUG: BESS parameters used: cycle_life={bess_params.get(KEY_CYCLE_LIFE)}, rte={bess_params.get(KEY_RTE)}")
 
+    # --- ADDED: Handle NoneType for capacity/power ---
     capacity_mwh = bess_params.get(KEY_CAPACITY, 0)
     power_mw = bess_params.get(KEY_POWER_MAX, 0)
+    capacity_mwh = capacity_mwh if capacity_mwh is not None else 0
+    power_mw = power_mw if power_mw is not None else 0
+    # --- End Add ---
+
     capacity_kwh = capacity_mwh * 1000
     power_kw = power_mw * 1000
 
-    # Opex params
-    fixed_om_per_kw_yr = bess_params.get(KEY_FIXED_OM, 0) # Will be None if KEY_OM_KWHR_YR is used
-    om_cost_per_kwh_yr = bess_params.get(KEY_OM_KWHR_YR, None)
+    # Opex params (ensure defaults if None)
+    fixed_om_per_kw_yr = bess_params.get(KEY_FIXED_OM, 0)
+    om_cost_per_kwh_yr = bess_params.get(KEY_OM_KWHR_YR, None) # Keep None possibility here
     insurance_percent_yr = bess_params.get(KEY_INSURANCE, 0)
+    fixed_om_per_kw_yr = fixed_om_per_kw_yr if fixed_om_per_kw_yr is not None else 0
+    insurance_percent_yr = insurance_percent_yr if insurance_percent_yr is not None else 0
 
-    # Decommissioning params
+
+    # Decommissioning params (ensure defaults if None)
     disconnect_cost_per_kwh = bess_params.get(KEY_DISCONNECT_COST, 0)
     recycling_cost_per_kwh = bess_params.get(KEY_RECYCLING_COST, 0) # Can be negative
+    disconnect_cost_per_kwh = disconnect_cost_per_kwh if disconnect_cost_per_kwh is not None else 0
+    recycling_cost_per_kwh = recycling_cost_per_kwh if recycling_cost_per_kwh is not None else 0
 
-    # Performance params
+
+    # Performance params (ensure defaults if None)
     cycle_life = bess_params.get(KEY_CYCLE_LIFE, 5000)
     calendar_life = bess_params.get(KEY_CALENDAR_LIFE, 15) # Years
+    cycle_life = cycle_life if cycle_life is not None else 5000
+    calendar_life = calendar_life if calendar_life is not None else 15
 
-    # Financial Parameters
+
+    # Financial Parameters (ensure defaults if None)
     years = int(financial_params.get(KEY_LIFESPAN, 30))
     wacc = financial_params.get(KEY_WACC, 0.131)
     inflation_rate = financial_params.get(KEY_INFLATION, 0.024)
     tax_rate = financial_params.get(KEY_TAX_RATE, 0.2009)
+    years = years if years is not None else 30
+    wacc = wacc if wacc is not None else 0.131
+    inflation_rate = inflation_rate if inflation_rate is not None else 0.024
+    tax_rate = tax_rate if tax_rate is not None else 0.2009
 
-    # EAF Parameters for battery life calculation
+
+    # EAF Parameters for battery life calculation (ensure defaults if None)
     days_per_year = eaf_params.get(KEY_DAYS_PER_YEAR, 300)
-    cycles_per_day = eaf_params.get(KEY_CYCLES_PER_DAY, 24) # Assuming 1 cycle = 1 full DoD equiv discharge/charge
+    cycles_per_day = eaf_params.get(KEY_CYCLES_PER_DAY, 24)
+    days_per_year = days_per_year if days_per_year is not None else 300
+    cycles_per_day = cycles_per_day if cycles_per_day is not None else 24
+
 
     # --- Initial Calculations ---
-    # Calculate Initial Capital Cost using helper
+    # Calculate Initial Capital Cost using helper (already handles None inside)
     total_initial_cost = calculate_initial_bess_cost(bess_params)
 
     # Net Initial Cost (Year 0)
@@ -557,15 +592,16 @@ def calculate_financial_metrics(bess_params, financial_params, eaf_params, annua
 
     # Calculate Annual O&M Cost (Year 1)
     # Handle different O&M structures
+    om_base_cost = 0 # Initialize
     if om_cost_per_kwh_yr is not None:
          # Use $/kWh/yr if available (e.g., for Supercapacitor)
          om_base_cost = om_cost_per_kwh_yr * capacity_kwh
-    elif fixed_om_per_kw_yr is not None:
+    elif fixed_om_per_kw_yr is not None: # Check fixed_om_per_kw_yr which now has a default
          # Otherwise use fixed $/kW/yr
          om_base_cost = fixed_om_per_kw_yr * power_kw
     else:
-         om_base_cost = 0 # Fallback if neither is defined
-         print(f"Warning: No O&M cost defined for technology {technology}")
+         # This case should be less likely now with defaults
+         print(f"Warning: No O&M cost defined or retrieved for technology {technology}")
 
     insurance_cost = (insurance_percent_yr / 100.0) * total_initial_cost # Insurance based on gross cost
     total_initial_om_cost = om_base_cost + insurance_cost
@@ -575,8 +611,6 @@ def calculate_financial_metrics(bess_params, financial_params, eaf_params, annua
     if days_per_year <= 0 or cycles_per_day <= 0:
         cycles_per_year_equiv = 0
     else:
-        # Assuming cycles_per_day represents equivalent full DoD cycles
-        # TODO: Could refine this based on actual DoD and bess_discharged_per_cycle_mwh if needed
         cycles_per_year_equiv = cycles_per_day * days_per_year
 
     # Calculate life limited by cycles
@@ -587,13 +621,12 @@ def calculate_financial_metrics(bess_params, financial_params, eaf_params, annua
 
     # Effective battery life is minimum of calendar and cycle life
     battery_replacement_interval = min(calendar_life, battery_life_years_cycles)
-    # Ensure interval is positive and finite for calculations
     if battery_replacement_interval <= 0 or pd.isna(battery_replacement_interval):
         battery_replacement_interval = float('inf')
         print("Warning: Calculated battery replacement interval is zero or invalid. No replacements will be scheduled.")
 
     # --- Cash Flow Calculation Loop ---
-    cash_flows = [-net_initial_cost]  # Year 0: Net initial investment
+    cash_flows = [-net_initial_cost]
 
     for year in range(1, years + 1):
         # Inflated Savings and O&M Costs for year t
@@ -602,54 +635,31 @@ def calculate_financial_metrics(bess_params, financial_params, eaf_params, annua
 
         # Recurring Replacement Cost Logic
         replacement_cost_year = 0
-        # Check if replacements are needed and interval is valid
         if battery_replacement_interval != float('inf'):
-            # Check if 'year' is a replacement year (handle floating point comparisons carefully)
-            # Replacement occurs at the *end* of the interval, so check against 'year' directly
-            # Using modulo: year 1 % 10 = 1, year 10 % 10 = 0. We want replacement in year 10, 20 etc.
-            # So check if year is a multiple of the interval.
-            # Add tolerance for floating point intervals.
             if year > 0 and abs(year % battery_replacement_interval) < 0.01 or \
                abs(year % battery_replacement_interval - battery_replacement_interval) < 0.01:
-                 # Replacement cost is the *original* total cost, inflated to the replacement year
-                 # Assume no incentives on replacements
                  inflated_replacement_cost = total_initial_cost * ((1 + inflation_rate) ** (year - 1))
                  replacement_cost_year = inflated_replacement_cost
                  print(f"DEBUG: Battery replacement cost ${replacement_cost_year:,.0f} applied in year {year} (Interval: {battery_replacement_interval:.1f} yrs)")
-            # Handle edge case of very short life (<1 year) - simplified: apply cost every year after year 0
             elif battery_replacement_interval < 1 and year >= 1:
                  replacements_per_year = int(1 / battery_replacement_interval) # Approx
                  inflated_replacement_cost = total_initial_cost * ((1 + inflation_rate) ** (year - 1))
                  replacement_cost_year = inflated_replacement_cost * replacements_per_year
                  print(f"DEBUG: Multiple ({replacements_per_year}) battery replacements costing ${replacement_cost_year:,.0f} applied in year {year}")
 
-
-        # EBT (Earnings Before Tax) - Simplified (no depreciation modeled here)
-        # TODO: Add depreciation for more accurate tax calculation if needed
+        # EBT (Earnings Before Tax)
         ebt = savings_t - o_m_cost_t - replacement_cost_year
-
-        # Taxes
-        taxes = ebt * tax_rate if ebt > 0 else 0 # Simplified tax calculation
-
-        # Net Cash Flow (After Tax, Before Decommissioning)
+        taxes = ebt * tax_rate if ebt > 0 else 0
         net_cash_flow = savings_t - o_m_cost_t - replacement_cost_year - taxes
 
         # Decommissioning Costs (Applied ONLY in the final year)
         if year == years:
-            # Calculate decommissioning cost (Disconnect + Recycling)
             decomm_cost_base = (disconnect_cost_per_kwh + recycling_cost_per_kwh) * capacity_kwh
-            # Inflate decommissioning cost to the final year
             inflated_decomm_cost = decomm_cost_base * ((1 + inflation_rate) ** (year - 1))
-            # Assume decommissioning cost is tax-deductible (reduces tax burden or is an expense)
-            # Simplification: treat it as an after-tax cash outflow
-            # TODO: Refine tax treatment of decommissioning if needed
-            decomm_cost_after_tax = inflated_decomm_cost * (1 - tax_rate) # Simple deduction
-            # print(f"DEBUG: Decommissioning Cost: Base=${decomm_cost_base:,.0f}, Applied (After Tax) = ${decomm_cost_after_tax:,.0f} in year {year}")
-
-            net_cash_flow -= decomm_cost_after_tax # Subtract cost in final year
+            decomm_cost_after_tax = inflated_decomm_cost * (1 - tax_rate)
+            net_cash_flow -= decomm_cost_after_tax
 
         cash_flows.append(net_cash_flow)
-    # --- End of Cash Flow Loop ---
 
     # --- Calculate Financial Metrics ---
     npv_val = float('nan'); irr_val = float('nan')
@@ -659,25 +669,23 @@ def calculate_financial_metrics(bess_params, financial_params, eaf_params, annua
     except Exception as e: print(f"Error calculating NPV: {e}")
 
     try:
-        # IRR requires initial outflow and at least one inflow
         if cash_flows and len(cash_flows) > 1 and cash_flows[0] < 0 and any(cf > 0 for cf in cash_flows[1:]):
             irr_val = npf.irr(cash_flows)
-            if irr_val is None or np.isnan(irr_val): irr_val = float("nan") # Handle cases where IRR doesn't converge
+            if irr_val is None or np.isnan(irr_val): irr_val = float("nan")
         else: irr_val = float('nan')
     except Exception as e: print(f"Error calculating IRR: {e}"); irr_val = float('nan')
 
     # --- Payback Period Calculation (Simple) ---
     cumulative_cash_flow = 0.0; payback_years = float('inf')
-    # Check if initial investment is non-positive (immediate payback or no investment)
     if cash_flows[0] >= 0:
         payback_years = 0.0
     else:
         cumulative_cash_flow = cash_flows[0]
         for year_pbk in range(1, len(cash_flows)):
             current_year_cf = cash_flows[year_pbk]
+            if current_year_cf is None: current_year_cf = 0 # Handle potential None in cash flows
             if cumulative_cash_flow + current_year_cf >= 0:
-                # Payback occurs within this year
-                fraction_needed = abs(cumulative_cash_flow) / current_year_cf if current_year_cf > 0 else 0
+                fraction_needed = abs(cumulative_cash_flow) / current_year_cf if current_year_cf is not None and current_year_cf > 0 else 0
                 payback_years = (year_pbk - 1) + fraction_needed
                 break
             cumulative_cash_flow += current_year_cf
@@ -689,8 +697,8 @@ def calculate_financial_metrics(bess_params, financial_params, eaf_params, annua
         "payback_years": payback_years,
         "cash_flows": cash_flows,
         "net_initial_cost": net_initial_cost,
-        "total_initial_cost": total_initial_cost, # Gross cost before incentives
-        "battery_life_years": battery_replacement_interval, # Effective life used for replacement
+        "total_initial_cost": total_initial_cost,
+        "battery_life_years": battery_replacement_interval,
         "annual_savings_year1": annual_savings,
         "initial_om_cost_year1": total_initial_om_cost,
     }
