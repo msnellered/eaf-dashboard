@@ -1307,7 +1307,28 @@ def display_calculation_results(n_clicks, eaf_params, bess_params, utility_param
 
         # --- Cards ---
         metrics_card = dbc.Card([ dbc.CardHeader("Financial Summary"), dbc.CardBody(html.Table([ html.Tr([html.Td("Net Present Value (NPV)"), html.Td(fmt_c(financial_metrics["npv"]))]), html.Tr([html.Td("Internal Rate of Return (IRR)"), html.Td(fmt_p(financial_metrics["irr"]))]), html.Tr([html.Td("Simple Payback Period"), html.Td(fmt_y(financial_metrics["payback_years"]))]), html.Tr([html.Td("Est. Battery Life (Replacement Interval)"), html.Td(fmt_y(financial_metrics["battery_life_years"]))]), html.Tr([html.Td("Net Initial Cost (After Incentives)"), html.Td(fmt_c(financial_metrics["net_initial_cost"]))]), html.Tr([html.Td("Gross Initial Cost (Before Incentives)"), html.Td(fmt_c(financial_metrics["total_initial_cost"]))]), ], className="table table-sm")) ])
-        savings_card = dbc.Card([ dbc.CardHeader("Annual Billing"), dbc.CardBody(html.Table([ html.Tr([html.Td("Baseline Bill (No BESS)"), html.Td(fmt_c(billing_results["annual_bill_without_bess"]))]), html.Tr([html.Td("Projected Bill (With BESS)"), html.Td(fmt_c(billing_results["annual_bill_with_bess"]))]), html.Tr([html.Td(html.Strong("Annual Savings")), html.Td(html.Strong(fmt_c(billing_results["annual_savings"])))]) ], className="table table-sm")) ])
+        # --- Calculate annual replacement cost ---
+        annual_replacement_cost = 0
+        if financial_metrics.get("battery_life_years", float('inf')) < 1 and financial_metrics.get("battery_life_years", 0) > 0:
+            # Calculate how many replacements per year
+            replacements_per_year = int(1 / financial_metrics["battery_life_years"])
+            # Use the initial cost as the base for the replacement cost (first year)
+            annual_replacement_cost = financial_metrics["total_initial_cost"] * replacements_per_year
+
+        # --- Annual O&M cost ---
+        annual_om_cost = financial_metrics.get("initial_om_cost_year1", 0)
+
+        savings_card = dbc.Card([
+            dbc.CardHeader("Annual Billing"),
+            dbc.CardBody(html.Table([
+                html.Tr([html.Td("Baseline Bill (No BESS)"), html.Td(fmt_c(billing_results["annual_bill_without_bess"]))]),
+                html.Tr([html.Td("Projected Bill (With BESS)"), html.Td(fmt_c(billing_results["annual_bill_with_bess"]))]),
+                html.Tr([html.Td("Annual Utility Savings"), html.Td(html.Strong(fmt_c(billing_results["annual_savings"])))]),
+                html.Tr([html.Td("Annual O&M Cost"), html.Td(html.Strong(fmt_c(annual_om_cost), className="text-danger"))]),
+                html.Tr([html.Td("Annual Replacement Cost"), html.Td(html.Strong(fmt_c(annual_replacement_cost), className="text-danger"))]),
+                html.Tr([html.Td("Net Annual Cost/Savings"), html.Td(html.Strong(fmt_c(billing_results["annual_savings"] - annual_replacement_cost - annual_om_cost)))]),
+            ], className="table table-sm"))
+        ])
         inc_items = [html.Tr([html.Td(desc), html.Td(fmt_c(amount))]) for desc, amount in incentive_results["breakdown"].items()]
         inc_items.append(html.Tr([html.Td(html.Strong("Total Incentives")), html.Td(html.Strong(fmt_c(incentive_results["total_incentive"]))) ]))
         incentives_card = dbc.Card([ dbc.CardHeader("Incentives Applied"), dbc.CardBody(html.Table(inc_items, className="table table-sm")) ])
