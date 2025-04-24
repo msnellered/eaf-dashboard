@@ -227,6 +227,25 @@ def get_default_bess_params():
         KEY_DOD: 95,
         KEY_CALENDAR_LIFE: 16,
     }
+def ensure_bess_params_complete(params_dict):
+    """Ensure any BESS params dictionary has all required fields."""
+    if not params_dict or not isinstance(params_dict, dict):
+        return get_default_bess_params()
+        
+    # Start with default values
+    complete_params = get_default_bess_params()
+    
+    # Update with provided values
+    for key, value in params_dict.items():
+        complete_params[key] = value
+    
+    # Explicitly ensure both O&M fields exist
+    if KEY_FIXED_OM not in complete_params:
+        complete_params[KEY_FIXED_OM] = 0
+    if KEY_OM_KWHR_YR not in complete_params:
+        complete_params[KEY_OM_KWHR_YR] = 0
+        
+    return complete_params
 
 # New IDs
 ID_PARAM_ACCORDION = "parameter-accordion"
@@ -1714,7 +1733,9 @@ def display_advanced_calculation_results(n_clicks, eaf_params, # REMOVED bess_pa
         if value is None: return default
         try: return int(float(value))
         except (ValueError, TypeError): return default
-
+    # Right after you construct the bess_params dictionary
+    bess_params = ensure_bess_params_complete(bess_params)
+    
     # Start with complete defaults
     bess_params = get_default_bess_params()
 
