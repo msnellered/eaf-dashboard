@@ -1314,7 +1314,12 @@ app.layout = dbc.Container(fluid=True, className="bg-light min-vh-100 py-4", chi
                             html.Div(id=ID_SEASONAL_CONTAINER, className="mb-3 border p-2 rounded"),
                             html.H6("Time-of-Use Periods", className="mt-3 mb-1"),
                             html.P("Define periods covering 24 hours. Gaps filled with Off-Peak.", className="small text-muted"),
-                            html.Div(id=ID_TOU_CONTAINER),
+                            html.Div(
+                                id=ID_TOU_CONTAINER),
+                                children=generate_tou_ui_elements(
+                                    default_utility_params.get(KEY_TOU_RAW, [(0.0, 24.0, "off_peak")])
+                                )
+                            ),   
                             dbc.Button("Add TOU Period", id=ID_ADD_TOU_BTN, n_clicks=0, size="sm", outline=True, color="success", className="mt-2"),
                         ])
                     ]),
