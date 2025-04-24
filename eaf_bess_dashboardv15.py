@@ -1624,21 +1624,23 @@ def update_bess_params_store(capacity, power, technology, sb_bos_cost, pcs_cost,
         store_data[KEY_DOD] = safe_float(dod, store_data.get(KEY_DOD, 0))
         store_data[KEY_CALENDAR_LIFE] = safe_int(calendar_life, store_data.get(KEY_CALENDAR_LIFE, 10))
 
-        # Handle the mutually exclusive O&M fields based on the selected technology's template structure
+        # CRITICAL FIX: Replace the mutual exclusivity section (around lines 626-755) with:
+
+        # Handle O&M fields - ALWAYS KEEP BOTH, but set the non-primary one to 0
         tech_template = bess_technology_data.get(technology, {}) # Get the template again for structure check
+
+        # Include both O&M values regardless of technology template
+        store_data[KEY_FIXED_OM] = safe_float(fixed_om, store_data.get(KEY_FIXED_OM, 0))
+        store_data[KEY_OM_KWHR_YR] = safe_float(om_kwhyr, store_data.get(KEY_OM_KWHR_YR, 0))
+
+        # Just set the primary one based on technology template (for informational purposes)
         if KEY_OM_KWHR_YR in tech_template:
-            store_data[KEY_OM_KWHR_YR] = safe_float(om_kwhyr)
-            store_data.pop(KEY_FIXED_OM, None)
             print(f"  Using O&M Key: {KEY_OM_KWHR_YR}")
         elif KEY_FIXED_OM in tech_template:
-            store_data[KEY_FIXED_OM] = safe_float(fixed_om, store_data.get(KEY_FIXED_OM, 0))
-            store_data[KEY_OM_KWHR_YR] = safe_float(om_kwhyr, store_data.get(KEY_OM_KWHR_YR, 0))
             print(f"  Using O&M Key: {KEY_FIXED_OM}")
         else:
             # Fallback if template structure is missing O&M keys
             print(f"  WARN: O&M structure unclear for tech '{technology}'. Defaulting to Fixed O&M.")
-            store_data[KEY_FIXED_OM] = safe_float(fixed_om)
-            store_data.pop(KEY_OM_KWHR_YR, None)
 
         print(f"  SUCCESS: Prepared STORE_BESS data:")
         # Use pprint for cleaner dictionary output
